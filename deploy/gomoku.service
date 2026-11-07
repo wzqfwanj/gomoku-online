@@ -1,0 +1,32 @@
+# /etc/systemd/system/gomoku.service
+# 五子棋联网游戏服务（Python 3.12 标准库实现，无第三方依赖）
+#
+# 安装：
+#   sudo cp deploy/gomoku.service /etc/systemd/system/gomoku.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now gomoku
+# 日志：
+#   journalctl -u gomoku -f
+
+[Unit]
+Description=Gomoku online
+Documentation=https://wkeeli.cn/gomoku/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/gomoku
+# 无缓冲，日志即时进 journald；不写 .pyc，保持 /opt/gomoku 干净
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /opt/gomoku/server.py --host 0.0.0.0 --port 8086
+# 游戏房间在内存里，进程崩溃即丢局，故 always + 2s 快速拉起
+Restart=always
+RestartSec=2
+# 标准输出/错误统一进 journald（默认行为，这里显式写死）
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

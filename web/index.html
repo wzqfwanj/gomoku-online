@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f5f5f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101010" media="(prefers-color-scheme: dark)">
+<title>五子棋</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<div class="app">
+  <button id="theme-toggle" class="theme-toggle" type="button" title="切换明暗主题" aria-label="切换明暗主题">
+    <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="4.1" fill="currentColor"></circle>
+      <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <path d="M12 2.6v2.1M12 19.3v2.1M2.6 12h2.1M19.3 12h2.1M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M18.7 5.3l-1.5 1.5M6.8 17.2l-1.5 1.5"></path>
+      </g>
+    </svg>
+    <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M20.2 14.6A8.6 8.6 0 0 1 9.4 3.8a7.5 7.5 0 1 0 10.8 10.8Z" fill="currentColor"></path>
+    </svg>
+    <span class="theme-toggle-text">主题</span>
+  </button>
+
+  <main id="view-lobby" class="view lobby">
+    <header class="lobby-head">
+      <h1 class="title">五子棋</h1>
+      <p class="rule">15×15 棋盘，黑方先行；横、竖、斜任意方向连成五子即胜，棋盘下满则为平局。</p>
+    </header>
+
+    <div class="lobby-actions">
+      <button id="create-btn" class="btn btn-primary" type="button">创建房间</button>
+
+      <div class="divider"><span>或</span></div>
+
+      <form id="join-form" class="join-form" novalidate>
+        <label class="sr-only" for="join-code">输入 6 位房号</label>
+        <input id="join-code" class="join-input" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="6" placeholder="输入 6 位房号">
+        <button id="join-submit" class="btn" type="submit">加入房间</button>
+      </form>
+    </div>
+
+    <p class="hint">创建房间后，把邀请链接发给朋友即可开始对局。</p>
+  </main>
+
+  <main id="view-game" class="view game" hidden>
+    <header class="game-head">
+      <div class="room-info">
+        <span class="room-label">房间</span>
+        <code id="room-code" class="room-code">------</code>
+        <button id="copy-btn" class="btn btn-small" type="button">复制邀请链接</button>
+      </div>
+      <p id="status" class="status" role="status" aria-live="polite">正在连接…</p>
+      <p id="presence" class="presence" aria-live="off"></p>
+    </header>
+
+    <div class="board-wrap">
+      <canvas id="board" class="board" width="600" height="600" aria-label="五子棋棋盘">你的浏览器不支持 Canvas，请更换浏览器。</canvas>
+    </div>
+
+    <footer class="game-actions">
+      <button id="restart-btn" class="btn" type="button" hidden>再来一局</button>
+      <button id="leave-btn" class="btn btn-ghost" type="button">返回大厅</button>
+    </footer>
+  </main>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
