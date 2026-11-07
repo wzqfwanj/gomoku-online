@@ -5,6 +5,8 @@
 - 在线地址：<https://wkeeli.cn/gomoku/>
 - 规则：15 × 15 棋盘，黑先，横/竖/斜任意方向连成 5 子获胜，棋盘下满为平局
 - 功能：创建 / 加入房间（6 位房号）、分享链接、观战、再来一局、断线重连、明暗主题切换
+- 音乐：可选的免费版权背景音乐（外链 [Incompetech](https://incompetech.com) · Kevin MacLeod · CC BY 4.0），默认关闭、点按钮播放；曲目清单见 `web/playlist.json`，署名见 `web/MUSIC-CREDITS.md`
+- 视觉：黑白灰极简 UI + 低饱和彩色氛围背景，棋盘质感、落子动画与胜利高光
 
 ## 技术栈
 
@@ -31,13 +33,13 @@ python server.py --port 9000     # 指定端口
 python tests/test_api.py --port 8086   # 需先启动服务
 ```
 
-覆盖建房、加入、观战、轮次校验、五连判胜、终局、再来一局、断线重连等 38 项断言。
+覆盖建房、加入、观战、轮次校验、五连判胜、终局、再来一局、断线重连等 41 项断言。
 
 ## 目录结构
 
 ```
 server.py          后端服务（HTTP API + SSE + 静态文件）
-web/               前端页面（index.html / style.css / app.js / favicon.svg）
+web/               前端页面（index.html / style.css / app.js / favicon.svg / playlist.json）
 tests/test_api.py  API 冒烟测试
 deploy/            部署配置（systemd unit、Caddy 路由片段、部署说明）
 ```

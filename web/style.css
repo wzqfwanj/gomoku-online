@@ -1,104 +1,181 @@
-/* 五子棋 · 极简黑白 · 原生 CSS */
+/* 五子棋 · 极简黑白 · 彩色氛围背景（原生 CSS，无外链资源） */
 
-/* ---------- 配色：明亮（默认） ---------- */
+/* ============================ 变量：明亮 ============================ */
 :root {
   color-scheme: light;
 
-  --bg: #f5f5f5;
-  --surface: #ffffff;
-  --surface-2: #eeeeee;
-  --text: #111111;
-  --text-muted: #6e6e6e;
-  --border: #dedede;
-  --border-strong: #a3a3a3;
-  --accent: #111111;
+  --bg: #eef1f6;
+  --bg-soft: #f6f7fa;
+  --text: #14161b;
+  --text-muted: #5d6470;
+  --border: rgba(20, 26, 40, 0.12);
+  --border-strong: rgba(20, 26, 40, 0.34);
+  --accent: #14161b;
   --accent-text: #ffffff;
-  --btn-bg: #ffffff;
+  --focus-ring: rgba(20, 22, 27, 0.6);
+  --focus-ring-soft: rgba(20, 22, 27, 0.16);
 
-  --board-bg: #ececec;
-  --board-line: #8f8f8f;
-  --board-line-strong: #5c5c5c;
-  --stone-black: #101010;
-  --stone-black-edge: #000000;
-  --stone-white: #fdfdfd;
-  --stone-white-edge: #8a8a8a;
-  --mark-on-black: #f5f5f5;
-  --mark-on-white: #101010;
-  --win-line: rgba(0, 0, 0, 0.22);
-  --win-ring: #2b2b2b;
+  --glass: rgba(255, 255, 255, 0.58);
+  --glass-strong: rgba(255, 255, 255, 0.84);
+  --glass-border: rgba(255, 255, 255, 0.72);
+  --panel-highlight: rgba(255, 255, 255, 0.7);
+  --shadow-lg: 0 32px 64px -32px rgba(20, 30, 55, 0.45), 0 2px 10px rgba(20, 30, 55, 0.07);
+  --shadow-sm: 0 8px 24px -14px rgba(20, 30, 55, 0.45);
 
-  --toast-bg: #111111;
+  /* 氛围光斑（低饱和彩色，只用于背景） */
+  --aurora-1: rgba(122, 162, 255, 0.55);
+  --aurora-2: rgba(255, 176, 133, 0.42);
+  --aurora-3: rgba(116, 222, 196, 0.4);
+  --aurora-4: rgba(190, 156, 255, 0.4);
+
+  /* 棋盘与棋子（纯灰阶） */
+  --board-frame: rgba(255, 255, 255, 0.58);
+  --board-bg-top: #f7f7f7;
+  --board-bg-bottom: #e8e8e8;
+  --board-vignette: rgba(0, 0, 0, 0.045);
+  --board-line: #a9a9a9;
+  --board-line-strong: #6e6e6e;
+  --star: #6e6e6e;
+  --stone-black-hi: #4d4d4d;
+  --stone-black: #151515;
+  --stone-black-lo: #050505;
+  --stone-black-edge: rgba(0, 0, 0, 0.5);
+  --stone-black-spec: rgba(255, 255, 255, 0.22);
+  --stone-white-hi: #ffffff;
+  --stone-white: #f4f4f4;
+  --stone-white-lo: #d3d3d3;
+  --stone-white-edge: rgba(90, 90, 90, 0.55);
+  --stone-white-spec: rgba(255, 255, 255, 0.95);
+  --stone-shadow: rgba(18, 18, 24, 0.26);
+  --mark-on-black: #f4f4f4;
+  --mark-on-white: #141414;
+  --win-line: rgba(20, 20, 25, 0.24);
+  --win-glow: rgba(20, 20, 25, 0.32);
+  --win-ring: rgba(20, 20, 25, 0.72);
+  --ghost-ring: rgba(20, 20, 25, 0.45);
+
+  --toast-bg: #14161b;
   --toast-text: #ffffff;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --music-glass: rgba(255, 255, 255, 0.84);
 }
 
-/* ---------- 配色：暗黑 ---------- */
+/* ============================ 变量：暗黑 ============================ */
 html[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #101010;
-  --surface: #1b1b1b;
-  --surface-2: #242424;
-  --text: #f2f2f2;
-  --text-muted: #a0a0a0;
-  --border: #333333;
-  --border-strong: #6e6e6e;
-  --accent: #f2f2f2;
-  --accent-text: #111111;
-  --btn-bg: #1b1b1b;
+  --bg: #0b0d12;
+  --bg-soft: #14161d;
+  --text: #f3f5f9;
+  --text-muted: #a3aab8;
+  --border: rgba(255, 255, 255, 0.14);
+  --border-strong: rgba(255, 255, 255, 0.42);
+  --accent: #f3f5f9;
+  --accent-text: #0b0d12;
+  --focus-ring: rgba(255, 255, 255, 0.62);
+  --focus-ring-soft: rgba(255, 255, 255, 0.18);
 
-  --board-bg: #1a1a1a;
-  --board-line: #505050;
-  --board-line-strong: #7c7c7c;
-  --stone-black: #060606;
-  --stone-black-edge: #5c5c5c;
-  --stone-white: #f2f2f2;
-  --stone-white-edge: #cfcfcf;
-  --mark-on-black: #ededed;
-  --mark-on-white: #0a0a0a;
-  --win-line: rgba(255, 255, 255, 0.22);
-  --win-ring: #e6e6e6;
+  --glass: rgba(22, 24, 31, 0.56);
+  --glass-strong: rgba(26, 29, 37, 0.86);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --panel-highlight: rgba(255, 255, 255, 0.08);
+  --shadow-lg: 0 40px 80px -40px rgba(0, 0, 0, 0.9), 0 2px 10px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 10px 30px -18px rgba(0, 0, 0, 0.9);
 
-  --toast-bg: #f2f2f2;
-  --toast-text: #111111;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --aurora-1: rgba(74, 110, 235, 0.4);
+  --aurora-2: rgba(190, 100, 70, 0.28);
+  --aurora-3: rgba(48, 170, 160, 0.32);
+  --aurora-4: rgba(150, 110, 230, 0.34);
+
+  --board-frame: rgba(255, 255, 255, 0.07);
+  --board-bg-top: #1b1c20;
+  --board-bg-bottom: #101114;
+  --board-vignette: rgba(0, 0, 0, 0.3);
+  --board-line: #55575d;
+  --board-line-strong: #8b8e96;
+  --star: #8b8e96;
+  --stone-black-hi: #383a40;
+  --stone-black: #0c0c0e;
+  --stone-black-lo: #000000;
+  --stone-black-edge: rgba(255, 255, 255, 0.28);
+  --stone-black-spec: rgba(255, 255, 255, 0.16);
+  --stone-white-hi: #ffffff;
+  --stone-white: #eceef2;
+  --stone-white-lo: #b9bcc4;
+  --stone-white-edge: rgba(255, 255, 255, 0.55);
+  --stone-white-spec: rgba(255, 255, 255, 0.95);
+  --stone-shadow: rgba(0, 0, 0, 0.55);
+  --mark-on-black: #f4f4f4;
+  --mark-on-white: #0e0e10;
+  --win-line: rgba(255, 255, 255, 0.26);
+  --win-glow: rgba(255, 255, 255, 0.5);
+  --win-ring: rgba(255, 255, 255, 0.82);
+  --ghost-ring: rgba(255, 255, 255, 0.5);
+
+  --toast-bg: #f3f5f9;
+  --toast-text: #0b0d12;
+  --music-glass: rgba(26, 29, 37, 0.86);
 }
 
-/* 脚本执行前跟随系统配色，避免闪烁 */
+/* 脚本执行前跟随系统配色，避免深色用户看到白闪 */
 @media (prefers-color-scheme: dark) {
   html:not([data-theme]) {
     color-scheme: dark;
 
-    --bg: #101010;
-    --surface: #1b1b1b;
-    --surface-2: #242424;
-    --text: #f2f2f2;
-    --text-muted: #a0a0a0;
-    --border: #333333;
-    --border-strong: #6e6e6e;
-    --accent: #f2f2f2;
-    --accent-text: #111111;
-    --btn-bg: #1b1b1b;
+    --bg: #0b0d12;
+    --bg-soft: #14161d;
+    --text: #f3f5f9;
+    --text-muted: #a3aab8;
+    --border: rgba(255, 255, 255, 0.14);
+    --border-strong: rgba(255, 255, 255, 0.42);
+    --accent: #f3f5f9;
+    --accent-text: #0b0d12;
+    --focus-ring: rgba(255, 255, 255, 0.62);
+    --focus-ring-soft: rgba(255, 255, 255, 0.18);
 
-    --board-bg: #1a1a1a;
-    --board-line: #505050;
-    --board-line-strong: #7c7c7c;
-    --stone-black: #060606;
-    --stone-black-edge: #5c5c5c;
-    --stone-white: #f2f2f2;
-    --stone-white-edge: #cfcfcf;
-    --mark-on-black: #ededed;
-    --mark-on-white: #0a0a0a;
-    --win-line: rgba(255, 255, 255, 0.22);
-    --win-ring: #e6e6e6;
+    --glass: rgba(22, 24, 31, 0.56);
+    --glass-strong: rgba(26, 29, 37, 0.86);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --panel-highlight: rgba(255, 255, 255, 0.08);
+    --shadow-lg: 0 40px 80px -40px rgba(0, 0, 0, 0.9), 0 2px 10px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 10px 30px -18px rgba(0, 0, 0, 0.9);
 
-    --toast-bg: #f2f2f2;
-    --toast-text: #111111;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --aurora-1: rgba(74, 110, 235, 0.4);
+    --aurora-2: rgba(190, 100, 70, 0.28);
+    --aurora-3: rgba(48, 170, 160, 0.32);
+    --aurora-4: rgba(150, 110, 230, 0.34);
+
+    --board-frame: rgba(255, 255, 255, 0.07);
+    --board-bg-top: #1b1c20;
+    --board-bg-bottom: #101114;
+    --board-vignette: rgba(0, 0, 0, 0.3);
+    --board-line: #55575d;
+    --board-line-strong: #8b8e96;
+    --star: #8b8e96;
+    --stone-black-hi: #383a40;
+    --stone-black: #0c0c0e;
+    --stone-black-lo: #000000;
+    --stone-black-edge: rgba(255, 255, 255, 0.28);
+    --stone-black-spec: rgba(255, 255, 255, 0.16);
+    --stone-white-hi: #ffffff;
+    --stone-white: #eceef2;
+    --stone-white-lo: #b9bcc4;
+    --stone-white-edge: rgba(255, 255, 255, 0.55);
+    --stone-white-spec: rgba(255, 255, 255, 0.95);
+    --stone-shadow: rgba(0, 0, 0, 0.55);
+    --mark-on-black: #f4f4f4;
+    --mark-on-white: #0e0e10;
+    --win-line: rgba(255, 255, 255, 0.26);
+    --win-glow: rgba(255, 255, 255, 0.5);
+    --win-ring: rgba(255, 255, 255, 0.82);
+    --ghost-ring: rgba(255, 255, 255, 0.5);
+
+    --toast-bg: #f3f5f9;
+    --toast-text: #0b0d12;
+    --music-glass: rgba(26, 29, 37, 0.86);
   }
 }
 
-/* ---------- 基础 ---------- */
+/* ============================ 基础 ============================ */
 * {
   box-sizing: border-box;
 }
@@ -112,6 +189,10 @@ body {
   min-height: 100%;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -122,8 +203,13 @@ body {
   font-size: 16px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  -webkit-text-size-adjust: 100%;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  overflow-x: hidden;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+::selection {
+  background: var(--text);
+  color: var(--bg);
 }
 
 .sr-only {
@@ -140,45 +226,157 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--text);
-  outline-offset: 2px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 
+/* ============================ 氛围背景 ============================ */
+.aurora {
+  position: fixed;
+  inset: -12vmax;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.aurora-blob {
+  position: absolute;
+  display: block;
+  width: 68vmax;
+  height: 68vmax;
+  border-radius: 50%;
+  will-change: transform;
+  animation: aurora-drift-a 46s ease-in-out infinite alternate;
+}
+
+.aurora-blob--a {
+  top: -22%;
+  left: -16%;
+  background: radial-gradient(circle at 42% 42%, var(--aurora-1) 0%, transparent 62%);
+}
+
+.aurora-blob--b {
+  top: -14%;
+  right: -20%;
+  background: radial-gradient(circle at 55% 45%, var(--aurora-2) 0%, transparent 62%);
+  animation: aurora-drift-b 58s ease-in-out infinite alternate;
+}
+
+.aurora-blob--c {
+  bottom: -26%;
+  left: 2%;
+  background: radial-gradient(circle at 45% 55%, var(--aurora-3) 0%, transparent 62%);
+  animation: aurora-drift-c 52s ease-in-out infinite alternate;
+}
+
+.aurora-blob--d {
+  bottom: -20%;
+  right: -10%;
+  background: radial-gradient(circle at 50% 50%, var(--aurora-4) 0%, transparent 62%);
+  animation: aurora-drift-d 64s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift-a {
+  0% { transform: translate3d(-3%, -3%, 0) scale(1); }
+  50% { transform: translate3d(9%, 7%, 0) scale(1.12); }
+  100% { transform: translate3d(-1%, 9%, 0) scale(1.02); }
+}
+
+@keyframes aurora-drift-b {
+  0% { transform: translate3d(4%, -2%, 0) scale(1.04); }
+  55% { transform: translate3d(-9%, 8%, 0) scale(0.96); }
+  100% { transform: translate3d(2%, 12%, 0) scale(1.08); }
+}
+
+@keyframes aurora-drift-c {
+  0% { transform: translate3d(2%, 5%, 0) scale(1.02); }
+  45% { transform: translate3d(-8%, -6%, 0) scale(1.1); }
+  100% { transform: translate3d(6%, -3%, 0) scale(0.98); }
+}
+
+@keyframes aurora-drift-d {
+  0% { transform: translate3d(-4%, 4%, 0) scale(0.98); }
+  50% { transform: translate3d(7%, -7%, 0) scale(1.1); }
+  100% { transform: translate3d(-6%, -2%, 0) scale(1.04); }
+}
+
+/* ============================ 布局 ============================ */
 .app {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 64px 16px calc(24px + env(safe-area-inset-bottom));
+  padding: 64px 18px calc(96px + env(safe-area-inset-bottom));
 }
 
-/* ---------- 主题切换按钮 ---------- */
+.view {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 660px;
+}
+
+.view:not([hidden]) {
+  animation: view-in 0.38s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.995); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 玻璃卡片 */
+.panel {
+  position: relative;
+  border: 1px solid var(--glass-border);
+  border-radius: 22px;
+  background: var(--glass);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(20px) saturate(125%);
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 1px 0 var(--panel-highlight);
+}
+
+/* ============================ 主题按钮 ============================ */
 .theme-toggle {
   position: fixed;
-  top: calc(12px + env(safe-area-inset-top));
-  right: 12px;
-  z-index: 20;
+  top: calc(14px + env(safe-area-inset-top));
+  right: 14px;
+  z-index: 40;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   padding: 8px 13px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--surface);
+  background: var(--glass-strong);
   color: var(--text);
   font: inherit;
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
   -webkit-tap-highlight-color: transparent;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition: border-color 0.18s ease, transform 0.18s ease, background-color 0.18s ease;
 }
 
 .theme-toggle:hover {
   border-color: var(--border-strong);
+  transform: translateY(-1px);
 }
 
 .theme-toggle .icon {
@@ -209,40 +407,48 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   }
 }
 
-/* ---------- 通用视图 ---------- */
-.view {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: 640px;
-}
-
-/* ---------- 大厅 ---------- */
+/* ============================ 大厅 ============================ */
 .lobby {
   align-items: stretch;
-  gap: 30px;
+}
+
+.lobby-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  padding: clamp(26px, 4.4vw, 46px) clamp(20px, 4vw, 44px);
   text-align: center;
-  padding: 16px 4px;
 }
 
 .lobby-head {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  align-items: center;
+  gap: 12px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
 }
 
 .title {
   margin: 0;
-  padding-left: 0.22em;
-  font-size: clamp(42px, 10vw, 64px);
+  padding-left: 0.2em;
+  font-size: clamp(42px, 9vw, 60px);
   font-weight: 600;
-  letter-spacing: 0.22em;
-  line-height: 1.15;
+  letter-spacing: 0.2em;
+  line-height: 1.12;
+  text-shadow: 0 1px 0 var(--panel-highlight);
 }
 
 .rule {
   margin: 0 auto;
-  max-width: 26em;
+  max-width: 27em;
   color: var(--text-muted);
   font-size: 14px;
   line-height: 1.75;
@@ -254,7 +460,6 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   gap: 14px;
   width: 100%;
   max-width: 360px;
-  margin: 0 auto;
 }
 
 .divider {
@@ -270,40 +475,7 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   content: "";
   flex: 1;
   height: 1px;
-  background: var(--border);
-}
-
-.join-form {
-  display: flex;
-  gap: 10px;
-}
-
-.join-input {
-  flex: 1;
-  min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 16px;
-  letter-spacing: 0.18em;
-  text-align: center;
-  text-transform: uppercase;
-  transition: border-color 0.15s ease;
-}
-
-.join-input::placeholder {
-  color: var(--text-muted);
-  font-size: 14px;
-  letter-spacing: normal;
-  text-transform: none;
-}
-
-.join-input:focus {
-  outline: none;
-  border-color: var(--text);
+  background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
 }
 
 .hint {
@@ -312,28 +484,33 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   font-size: 12px;
 }
 
-/* ---------- 按钮 ---------- */
+/* ============================ 按钮 / 输入 ============================ */
 .btn {
   appearance: none;
   -webkit-appearance: none;
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  background: var(--btn-bg);
+  border-radius: 12px;
+  background: var(--glass-strong);
   color: var(--text);
   font: inherit;
   font-size: 15px;
+  font-weight: 500;
   padding: 12px 18px;
   cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   -webkit-tap-highlight-color: transparent;
-  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, transform 0.05s ease;
+  transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
 }
 
 .btn:hover:not(:disabled) {
   border-color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: translateY(0) scale(0.99);
 }
 
 .btn:disabled {
@@ -346,39 +523,86 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   background: var(--accent);
   color: var(--accent-text);
   font-weight: 600;
+  box-shadow: 0 16px 34px -18px rgba(8, 10, 16, 0.6);
 }
 
 .btn-primary:hover:not(:disabled) {
   border-color: var(--accent);
-  opacity: 0.88;
+  background: var(--accent);
+  opacity: 0.9;
+  box-shadow: 0 20px 40px -18px rgba(8, 10, 16, 0.65);
 }
 
 .btn-ghost {
   border-color: transparent;
   background: transparent;
   color: var(--text-muted);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .btn-ghost:hover:not(:disabled) {
   border-color: var(--border);
+  background: var(--glass);
   color: var(--text);
 }
 
 .btn-small {
-  padding: 6px 10px;
-  border-radius: 8px;
+  padding: 6px 11px;
+  border-radius: 9px;
   font-size: 13px;
 }
 
-/* ---------- 对局 ---------- */
+.join-form {
+  display: flex;
+  gap: 10px;
+}
+
+.join-input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--glass-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  letter-spacing: 0.18em;
+  text-align: center;
+  text-transform: uppercase;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+.join-input::placeholder {
+  color: var(--text-muted);
+  font-size: 14px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.join-input:hover {
+  border-color: var(--border-strong);
+}
+
+.join-input:focus {
+  outline: none;
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 3px var(--focus-ring-soft);
+}
+
+/* ============================ 对局 ============================ */
 .game {
-  gap: 16px;
+  gap: 14px;
 }
 
 .game-head {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  padding: 14px clamp(14px, 2.4vw, 22px);
 }
 
 .room-info {
@@ -390,15 +614,16 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
 
 .room-label {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
 }
 
 .room-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
   font-size: 19px;
   font-weight: 600;
-  letter-spacing: 0.2em;
-  padding: 2px 2px 2px 0;
+  letter-spacing: 0.22em;
+  font-variant-numeric: tabular-nums;
 }
 
 .status {
@@ -406,7 +631,7 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   min-height: 1.5em;
   font-size: 16px;
   font-weight: 600;
-  line-height: 1.5;
+  letter-spacing: 0.01em;
 }
 
 .status--turn {
@@ -437,19 +662,35 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   word-break: break-word;
 }
 
+/* 棋盘卡面 */
 .board-wrap {
-  width: min(100%, 620px, max(240px, calc(100vh - 250px)));
-  width: min(100%, 620px, max(240px, calc(100dvh - 250px)));
-  aspect-ratio: 1 / 1;
+  position: relative;
+  width: min(100%, 620px, max(240px, calc(100vh - 360px)));
+  width: min(100%, 620px, max(240px, calc(100dvh - 360px)));
   margin: 0 auto;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--board-bg);
-  box-shadow: var(--shadow);
+  padding: clamp(8px, 1.2vw, 13px);
+  border: 1px solid var(--board-frame);
+  border-radius: 22px;
+  background: var(--glass);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 var(--panel-highlight);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
 }
 
-.board {
+.board-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--board-bg-top);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06), inset 0 18px 40px -24px rgba(0, 0, 0, 0.35);
+}
+
+.board,
+.board-fx {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
@@ -459,6 +700,14 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   -webkit-user-select: none;
 }
 
+.board {
+  cursor: default;
+}
+
+.board-fx {
+  pointer-events: none;
+}
+
 .game-actions {
   display: flex;
   justify-content: center;
@@ -466,13 +715,269 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   flex-wrap: wrap;
 }
 
-/* ---------- Toast ---------- */
+/* ============================ 音乐胶囊 ============================ */
+.music-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(calc(100vw - 20px), 560px);
+  padding: 6px 10px 6px 7px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--music-glass);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(20px) saturate(125%);
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  transform: translateX(-50%);
+  transition: opacity 0.2s ease;
+}
+
+.music-bar.is-loading {
+  opacity: 0.6;
+}
+
+.music-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
+}
+
+.music-btn:hover:not(:disabled) {
+  background: var(--border);
+}
+
+.music-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.music-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.music-btn .icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.music-btn--main {
+  width: 36px;
+  height: 36px;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.music-btn--main:hover:not(:disabled) {
+  background: var(--accent);
+  opacity: 0.88;
+}
+
+.music-btn--main .icon {
+  width: 17px;
+  height: 17px;
+}
+
+.music-btn--main .icon-pause {
+  display: none;
+}
+
+.music-bar.is-playing .music-btn--main .icon-play {
+  display: none;
+}
+
+.music-bar.is-playing .music-btn--main .icon-pause {
+  display: block;
+}
+
+.music-btn--vol .icon-vol-off {
+  display: none;
+}
+
+.music-bar.is-muted .music-btn--vol .icon-vol-on {
+  display: none;
+}
+
+.music-bar.is-muted .music-btn--vol .icon-vol-off {
+  display: block;
+}
+
+.music-info {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  max-width: 190px;
+  overflow: hidden;
+}
+
+.music-title {
+  display: block;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-title.is-scroll {
+  text-overflow: clip;
+  animation: music-marquee var(--marquee-duration, 12s) ease-in-out infinite;
+}
+
+.music-artist {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-eq {
+  display: inline-flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+
+.music-eq i {
+  display: block;
+  width: 2.5px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--text);
+  opacity: 0.55;
+  transform: scaleY(0.28);
+  transform-origin: bottom;
+  animation: eq-pulse 1.05s ease-in-out infinite alternate;
+  animation-play-state: paused;
+}
+
+.music-eq i:nth-child(2) {
+  height: 75%;
+  animation-delay: -0.32s;
+}
+
+.music-eq i:nth-child(3) {
+  height: 92%;
+  animation-delay: -0.55s;
+}
+
+.music-eq i:nth-child(4) {
+  height: 62%;
+  animation-delay: -0.15s;
+}
+
+.music-bar.is-playing .music-eq i {
+  animation-play-state: running;
+}
+
+.music-volume {
+  flex: none;
+  width: 64px;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.music-volume::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--border-strong);
+}
+
+.music-volume::-webkit-slider-thumb {
+  width: 11px;
+  height: 11px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.music-volume::-moz-range-track {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--border-strong);
+}
+
+.music-volume::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+}
+
+.music-volume:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.music-credit {
+  flex: none;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+.music-credit:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+@keyframes eq-pulse {
+  from { transform: scaleY(0.22); }
+  to { transform: scaleY(1); }
+}
+
+@keyframes music-marquee {
+  0%, 10% { transform: translateX(0); }
+  45%, 62% { transform: translateX(var(--marquee-shift, -20px)); }
+  90%, 100% { transform: translateX(0); }
+}
+
+/* ============================ Toast ============================ */
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(24px + env(safe-area-inset-bottom));
+  bottom: calc(88px + env(safe-area-inset-bottom));
   z-index: 50;
-  max-width: min(90vw, 440px);
+  max-width: min(90vw, 460px);
   padding: 10px 18px;
   border-radius: 999px;
   background: var(--toast-bg);
@@ -482,26 +987,26 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   text-align: center;
   opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, 10px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-  transition: opacity 0.18s ease, transform 0.18s ease;
+  transform: translate(-50%, 12px) scale(0.98);
+  box-shadow: var(--shadow-lg);
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.22, 0.8, 0.24, 1);
 }
 
 .toast.show {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translate(-50%, 0) scale(1);
 }
 
 /* 错误提示：黑白色调内用反色描边 + 加粗区分，不使用彩色 */
 .toast--error {
-  border: 1px solid var(--toast-text);
+  border: 1px solid currentColor;
   font-weight: 600;
 }
 
-/* ---------- 响应式 ---------- */
-@media (max-width: 480px) {
+/* ============================ 响应式 ============================ */
+@media (max-width: 560px) {
   .app {
-    padding-top: 56px;
+    padding: 60px 14px calc(96px + env(safe-area-inset-bottom));
   }
 
   .theme-toggle {
@@ -514,9 +1019,15 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
     display: none;
   }
 
+  .lobby-card {
+    gap: 24px;
+    padding: 26px 18px 30px;
+  }
+
   .title {
-    letter-spacing: 0.14em;
-    padding-left: 0.14em;
+    font-size: clamp(38px, 12vw, 52px);
+    letter-spacing: 0.15em;
+    padding-left: 0.15em;
   }
 
   .room-code {
@@ -527,26 +1038,53 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
     font-size: 15px;
   }
 
-  .board-wrap {
-    width: min(100%, max(240px, calc(100vh - 240px)));
-    width: min(100%, max(240px, calc(100dvh - 240px)));
+  .music-bar {
+    gap: 6px;
+    padding: 6px 8px 6px 6px;
+    max-width: calc(100vw - 16px);
+  }
+
+  .music-info {
+    max-width: 120px;
+  }
+
+  .music-eq {
+    display: none;
+  }
+
+  .music-volume {
+    width: 46px;
+  }
+
+  .music-credit {
+    padding: 2px 5px;
+    font-size: 9px;
   }
 
   .game-actions .btn {
     flex: 1;
     min-width: 120px;
   }
+
+  .toast {
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
 }
 
-/* 矮屏（手机横屏、小窗）：压缩留白，优先保证棋盘可玩 */
-@media (max-height: 620px) {
+/* 矮屏 / 手机横屏：优先保证可玩，允许纵向滚动 */
+@media (max-height: 640px) {
   .app {
     justify-content: flex-start;
-    padding-top: calc(52px + env(safe-area-inset-top));
+    padding-top: calc(48px + env(safe-area-inset-top));
+    padding-bottom: calc(82px + env(safe-area-inset-bottom));
   }
 
   .game {
-    gap: 8px;
+    gap: 10px;
+  }
+
+  .game-head {
+    padding: 10px 14px;
   }
 
   .presence {
@@ -554,8 +1092,27 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   }
 
   .board-wrap {
-    width: min(100%, 620px, calc(100vh - 170px));
-    width: min(100%, 620px, calc(100dvh - 170px));
+    width: min(100%, 620px, max(220px, calc(100vh - 220px)));
+    width: min(100%, 620px, max(220px, calc(100dvh - 220px)));
+  }
+
+  .music-bar {
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    padding: 4px 8px;
+  }
+
+  .music-bar .music-artist,
+  .music-bar .music-eq,
+  .music-bar .music-credit {
+    display: none;
+  }
+
+  .music-volume {
+    width: 44px;
+  }
+
+  .toast {
+    bottom: calc(70px + env(safe-area-inset-bottom));
   }
 
   .game-actions .btn {
@@ -563,10 +1120,41 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   }
 }
 
+/* 不支持 backdrop-filter 时用更实的底色 */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  .panel,
+  .board-wrap,
+  .music-bar,
+  .theme-toggle,
+  .join-input {
+    background: var(--glass-strong);
+  }
+
+  .btn:not(.btn-primary) {
+    background: var(--glass-strong);
+  }
+}
+
+/* 减少动态效果 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    transition: none !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .aurora-blob {
+    animation: none !important;
+  }
+
+  .music-eq i {
+    animation: none !important;
+    transform: scaleY(0.45);
+  }
+
+  .music-title.is-scroll {
+    animation: none !important;
   }
 }

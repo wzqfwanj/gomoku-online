@@ -4,6 +4,8 @@
 
   var BOARD_SIZE = 15;
   var BOARD_PAD_RATIO = 0.065; // 棋盘留白占画布比例（与点击命中判定共用）
+  var MOVE_ANIM_MS = 560; // 最后一手落子动画时长
+  var MUSIC_WATCHDOG_MS = 12000; // 音乐加载超时（超时视为失败，自动跳下一首）
 
   var API = {
     room: './api/room',
@@ -13,8 +15,17 @@
     stream: './api/stream'
   };
 
+  var PLAYLIST_URL = './playlist.json';
   var LS_THEME = 'gomoku:theme';
   var LS_TOKEN_PREFIX = 'gomoku:token.';
+  var LS_MUSIC = {
+    playing: 'gomoku:music:playing',
+    volume: 'gomoku:music:volume',
+    index: 'gomoku:music:index',
+    muted: 'gomoku:music:muted'
+  };
+
+  var reducedMotionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 
   function $(id) {
     return document.getElementById(id);
@@ -33,16 +44,27 @@
     status: $('status'),
     presence: $('presence'),
     board: $('board'),
+    boardFx: $('board-fx'),
     restartBtn: $('restart-btn'),
     leaveBtn: $('leave-btn'),
-    toast: $('toast')
+    toast: $('toast'),
+    musicBar: $('music-bar'),
+    musicPlay: $('music-play'),
+    musicNext: $('music-next'),
+    musicMute: $('music-mute'),
+    musicVolume: $('music-volume'),
+    musicTitle: $('music-title'),
+    musicArtist: $('music-artist'),
+    musicCredit: $('music-credit'),
+    audio: $('music-audio')
   };
+  var musicInfo = ui.musicTitle ? ui.musicTitle.parentElement : null;
 
   var app = {
     roomId: '',
     token: '',
     color: 0, // 1 黑 2 白 0 观战/未入座
-    state: null, // 服务器最新 state
+    state: null,
     es: null,
     joined: false,
     needsRejoin: false,
@@ -53,10 +75,29 @@
     seen: { black: false, white: false },
     spectatorHintShown: false,
     toastTimer: null,
-    palette: null
+    palette: null,
+    view: { ready: false, size: 0, dpr: 1, pad: 0, step: 0 },
+    fx: { raf: null, hover: null, moveStart: 0, lastMoveKey: '' },
+    music: {
+      tracks: [],
+      index: 0,
+      ready: false,
+      available: false,
+      playing: false,
+      intent: false,
+      failures: 0,
+      muted: false,
+      volume: 0.5,
+      watchdog: null,
+      pendingPlay: false,
+      resumeArmed: false,
+      lastErrorAt: 0,
+      attemptId: 0,
+      failureHandledId: 0
+    }
   };
 
-  /* ============================ 存储 / 主题 ============================ */
+  /* ============================ 存储 / 小工具 ============================ */
 
   function storageGet(key) {
     try {
@@ -86,6 +127,10 @@
     return LS_TOKEN_PREFIX + roomId;
   }
 
+  function prefersReducedMotion() {
+    return !!(reducedMotionQuery && reducedMotionQuery.matches);
+  }
+
   function systemPrefersDark() {
     return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   }
@@ -93,6 +138,8 @@
   function currentTheme() {
     return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
   }
+
+  /* ============================ 主题 ============================ */
 
   function applyTheme(theme, persist) {
     document.documentElement.setAttribute('data-theme', theme);
@@ -102,12 +149,12 @@
       ui.themeToggle.setAttribute('aria-label', '切换明暗主题（当前' + name + '）');
       ui.themeToggle.setAttribute('title', '切换明暗主题（当前' + name + '）');
     }
-    drawBoard();
+    app.palette = null;
+    redrawBoard();
   }
 
   function toggleTheme() {
-    var next = currentTheme() === 'dark' ? 'light' : 'dark';
-    applyTheme(next, true);
+    applyTheme(currentTheme() === 'dark' ? 'light' : 'dark', true);
   }
 
   function initTheme() {
@@ -119,15 +166,10 @@
       var mq = window.matchMedia('(prefers-color-scheme: dark)');
       var onChange = function (ev) {
         var pref = storageGet(LS_THEME);
-        if (pref !== 'dark' && pref !== 'light') {
-          applyTheme(ev.matches ? 'dark' : 'light', false);
-        }
+        if (pref !== 'dark' && pref !== 'light') applyTheme(ev.matches ? 'dark' : 'light', false);
       };
-      if (mq.addEventListener) {
-        mq.addEventListener('change', onChange);
-      } else if (mq.addListener) {
-        mq.addListener(onChange);
-      }
+      if (mq.addEventListener) mq.addEventListener('change', onChange);
+      else if (mq.addListener) mq.addListener(onChange);
     }
   }
 
@@ -142,17 +184,29 @@
     };
 
     var colors = {
-      boardBg: read('--board-bg', '#ececec'),
-      line: read('--board-line', '#8f8f8f'),
-      lineStrong: read('--board-line-strong', '#5c5c5c'),
-      stoneBlack: read('--stone-black', '#101010'),
-      stoneBlackEdge: read('--stone-black-edge', '#000000'),
-      stoneWhite: read('--stone-white', '#fdfdfd'),
-      stoneWhiteEdge: read('--stone-white-edge', '#8a8a8a'),
-      markOnBlack: read('--mark-on-black', '#f5f5f5'),
-      markOnWhite: read('--mark-on-white', '#101010'),
-      winLine: read('--win-line', 'rgba(0, 0, 0, 0.22)'),
-      winRing: read('--win-ring', '#2b2b2b')
+      boardTop: read('--board-bg-top', '#f7f7f7'),
+      boardBottom: read('--board-bg-bottom', '#e8e8e8'),
+      vignette: read('--board-vignette', 'rgba(0, 0, 0, 0.045)'),
+      line: read('--board-line', '#a9a9a9'),
+      lineStrong: read('--board-line-strong', '#6e6e6e'),
+      star: read('--star', '#6e6e6e'),
+      blackHi: read('--stone-black-hi', '#4d4d4d'),
+      black: read('--stone-black', '#151515'),
+      blackLo: read('--stone-black-lo', '#050505'),
+      blackEdge: read('--stone-black-edge', 'rgba(0, 0, 0, 0.5)'),
+      blackSpec: read('--stone-black-spec', 'rgba(255, 255, 255, 0.22)'),
+      whiteHi: read('--stone-white-hi', '#ffffff'),
+      white: read('--stone-white', '#f4f4f4'),
+      whiteLo: read('--stone-white-lo', '#d3d3d3'),
+      whiteEdge: read('--stone-white-edge', 'rgba(90, 90, 90, 0.55)'),
+      whiteSpec: read('--stone-white-spec', 'rgba(255, 255, 255, 0.95)'),
+      stoneShadow: read('--stone-shadow', 'rgba(18, 18, 24, 0.26)'),
+      markOnBlack: read('--mark-on-black', '#f4f4f4'),
+      markOnWhite: read('--mark-on-white', '#141414'),
+      winLine: read('--win-line', 'rgba(20, 20, 25, 0.24)'),
+      winGlow: read('--win-glow', 'rgba(20, 20, 25, 0.32)'),
+      winRing: read('--win-ring', 'rgba(20, 20, 25, 0.72)'),
+      ghostRing: read('--ghost-ring', 'rgba(20, 20, 25, 0.45)')
     };
     app.palette = { theme: theme, colors: colors };
     return colors;
@@ -191,7 +245,7 @@
     try {
       window.history.replaceState(null, '', '?room=' + encodeURIComponent(roomId));
     } catch (err) {
-      /* 某些环境（file://）可能不允许，忽略 */
+      /* 忽略 */
     }
   }
 
@@ -243,23 +297,15 @@
     var color = res && typeof res.color === 'number' ? res.color : 0;
     if (color !== 0 && color !== 1 && color !== 2) color = 0;
     var token = res && res.token ? String(res.token) : (fallbackToken || '');
-
-    if (color === 1 || color === 2) {
-      return { color: color, token: token };
-    }
-    // 观战者不保存座位 token
+    if (color === 1 || color === 2) return { color: color, token: token };
     storageRemove(tokenKey(roomId));
     return { color: 0, token: '' };
   }
 
   function handleJoinError(err) {
-    if (err && err.code === 'room_not_found') {
-      toast('房间不存在或已失效');
-    } else if (err && err.name === 'AbortError') {
-      toast('连接超时，请重试', 'error');
-    } else {
-      toast('加入房间失败，请稍后重试', 'error');
-    }
+    if (err && err.code === 'room_not_found') toast('房间不存在或已失效');
+    else if (err && err.name === 'AbortError') toast('连接超时，请重试', 'error');
+    else toast('加入房间失败，请稍后重试', 'error');
   }
 
   async function createRoom() {
@@ -273,7 +319,7 @@
       var roomId = normalizeRoomId(res && res.roomId);
       if (!roomId) throw new Error('bad_response');
       var token = res && res.token ? String(res.token) : '';
-      var color = res && res.color === 2 ? 2 : 1; // 创建者执黑
+      var color = res && res.color === 2 ? 2 : 1;
       enterGame(roomId, color, token);
     } catch (err) {
       toast('创建房间失败，请稍后重试', 'error');
@@ -378,7 +424,6 @@
       onServerState(data);
     });
 
-    // 兼容未携带 event 名的 data 消息
     es.onmessage = function (ev) {
       var data = null;
       try {
@@ -424,7 +469,6 @@
         toast('房间已失效');
         leaveToLobby();
       }
-      // 其他错误静默，交给 EventSource 继续重连
     }
   }
 
@@ -432,11 +476,19 @@
     if (!state || typeof state !== 'object') return;
     var previous = app.state;
     app.state = state;
+
     if (state.players) {
       if (state.players.black && state.players.black.connected) app.seen.black = true;
       if (state.players.white && state.players.white.connected) app.seen.white = true;
     }
     app.restartPending = false;
+
+    var lm = state.lastMove;
+    var key = lm && typeof lm.x === 'number' && typeof lm.y === 'number' ? lm.x + ':' + lm.y + ':' + (state.moves | 0) : '';
+    if (key !== app.fx.lastMoveKey) {
+      app.fx.lastMoveKey = key;
+      app.fx.moveStart = key && !prefersReducedMotion() ? window.performance.now() : 0;
+    }
 
     if (previous && previous.winner !== 0 && !state.winner && (state.moves | 0) === 0) {
       toast('新一局开始，黑方先行');
@@ -446,10 +498,10 @@
     updatePresence();
     updateRestartButton();
     updateBoardCursor();
-    drawBoard();
+    redrawBoard();
   }
 
-  /* ============================ 视图切换 ============================ */
+  /* ============================ 视图 ============================ */
 
   function setLobbyControlsDisabled(disabled) {
     ui.createBtn.disabled = disabled;
@@ -457,8 +509,19 @@
     ui.joinSubmit.disabled = disabled;
   }
 
+  function resetFxState() {
+    app.fx.hover = null;
+    app.fx.moveStart = 0;
+    app.fx.lastMoveKey = '';
+    if (app.fx.raf) {
+      window.cancelAnimationFrame(app.fx.raf);
+      app.fx.raf = null;
+    }
+  }
+
   function showLobby() {
     closeStream();
+    resetFxState();
     app.roomId = '';
     app.token = '';
     app.color = 0;
@@ -485,6 +548,7 @@
 
   function enterGame(roomId, color, token) {
     closeStream();
+    resetFxState();
     app.roomId = roomId;
     app.token = token || '';
     app.color = color === 2 ? 2 : color === 1 ? 1 : 0;
@@ -496,16 +560,16 @@
     app.seen = { black: false, white: false };
     app.spectatorHintShown = false;
 
-    if ((app.color === 1 || app.color === 2) && app.token) {
-      storageSet(tokenKey(roomId), app.token);
-    }
+    if ((app.color === 1 || app.color === 2) && app.token) storageSet(tokenKey(roomId), app.token);
 
     ui.lobby.hidden = true;
     ui.game.hidden = false;
     ui.roomCode.textContent = roomId;
     setRoomInUrl(roomId);
     updateAll();
-    window.requestAnimationFrame(drawBoard);
+    window.requestAnimationFrame(function () {
+      redrawBoard();
+    });
     openStream();
   }
 
@@ -551,9 +615,7 @@
     var other = otherSeat();
 
     if (state.winner) {
-      if (readyAt('black') && readyAt('white')) {
-        return { text: '双方已准备，正在重开…', tone: 'wait' };
-      }
+      if (readyAt('black') && readyAt('white')) return { text: '双方已准备，正在重开…', tone: 'wait' };
       var base;
       if (state.winner === 3) base = '平局，棋盘已满';
       else if (state.winner === 1) base = '黑方获胜';
@@ -562,9 +624,7 @@
 
       var extra = '';
       if (isPlayer) {
-        if (state.winner !== 3) {
-          extra += state.winner === app.color ? ' · 你赢了' : ' · 你输了';
-        }
+        if (state.winner !== 3) extra += state.winner === app.color ? ' · 你赢了' : ' · 你输了';
         if (readyAt(mine)) extra += ' · 你已准备再来一局';
         else if (readyAt(other)) extra += ' · 对手已准备再来一局';
       } else {
@@ -643,7 +703,7 @@
   }
 
   function updateBoardCursor() {
-    ui.board.style.cursor = canPlayNow() ? 'pointer' : 'default';
+    if (ui.board) ui.board.style.cursor = canPlayNow() ? 'pointer' : 'default';
   }
 
   function updateAll() {
@@ -651,53 +711,119 @@
     updatePresence();
     updateRestartButton();
     updateBoardCursor();
-    drawBoard();
+    redrawBoard();
   }
 
   /* ============================ 棋盘绘制 ============================ */
 
-  function drawStone(ctx, cx, cy, radius, color, palette) {
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.fillStyle = color === 1 ? palette.stoneBlack : palette.stoneWhite;
-    ctx.fill();
-    ctx.lineWidth = Math.max(1, radius * 0.08);
-    ctx.strokeStyle = color === 1 ? palette.stoneBlackEdge : palette.stoneWhiteEdge;
-    ctx.stroke();
+  function layoutCanvases() {
+    var base = ui.board;
+    var fx = ui.boardFx;
+    if (!base || !fx || !base.getContext) {
+      app.view.ready = false;
+      return false;
+    }
+    var rect = base.getBoundingClientRect();
+    var size = Math.floor(Math.min(rect.width, rect.height));
+    if (size < 40) {
+      app.view.ready = false;
+      return false;
+    }
+    var dpr = window.devicePixelRatio || 1;
+    var pixel = Math.max(1, Math.round(size * dpr));
+    [base, fx].forEach(function (canvas) {
+      if (canvas.width !== pixel || canvas.height !== pixel) {
+        canvas.width = pixel;
+        canvas.height = pixel;
+      }
+      var ctx = canvas.getContext('2d');
+      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    });
+    var pad = size * BOARD_PAD_RATIO;
+    var step = (size - pad * 2) / (BOARD_SIZE - 1);
+    app.view = { ready: true, size: size, dpr: dpr, pad: pad, step: step };
+    return true;
   }
 
-  function drawBoard() {
-    var canvas = ui.board;
-    if (!canvas || !canvas.getContext) return;
-
-    var rect = canvas.getBoundingClientRect();
-    var size = Math.floor(Math.min(rect.width, rect.height));
-    if (size < 60) return; // 大厅视图下不可见
-
-    var dpr = window.devicePixelRatio || 1;
-    var pixelSize = Math.max(1, Math.round(size * dpr));
-    if (canvas.width !== pixelSize || canvas.height !== pixelSize) {
-      canvas.width = pixelSize;
-      canvas.height = pixelSize;
+  function drawStone(ctx, cx, cy, radius, color, palette, options) {
+    options = options || {};
+    var ghost = !!options.ghost;
+    var alpha = typeof options.alpha === 'number' ? options.alpha : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    if (!ghost) {
+      ctx.shadowColor = palette.stoneShadow;
+      ctx.shadowBlur = Math.max(2, radius * 0.55);
+      ctx.shadowOffsetY = Math.max(1, radius * 0.16);
     }
+    var gradient = ctx.createRadialGradient(
+      cx - radius * 0.34,
+      cy - radius * 0.4,
+      radius * 0.08,
+      cx,
+      cy,
+      radius * 1.02
+    );
+    if (color === 1) {
+      gradient.addColorStop(0, palette.blackHi);
+      gradient.addColorStop(0.55, palette.black);
+      gradient.addColorStop(1, palette.blackLo);
+    } else {
+      gradient.addColorStop(0, palette.whiteHi);
+      gradient.addColorStop(0.6, palette.white);
+      gradient.addColorStop(1, palette.whiteLo);
+    }
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.lineWidth = Math.max(0.75, radius * 0.055);
+    ctx.strokeStyle = color === 1 ? palette.blackEdge : palette.whiteEdge;
+    ctx.stroke();
+    if (!ghost) {
+      ctx.beginPath();
+      ctx.arc(cx - radius * 0.3, cy - radius * 0.34, radius * 0.24, 0, Math.PI * 2);
+      ctx.fillStyle = color === 1 ? palette.blackSpec : palette.whiteSpec;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 
+  function drawBoardBase() {
+    if (!app.view.ready) return;
+    var canvas = ui.board;
     var ctx = canvas.getContext('2d');
     if (!ctx) return;
+    var size = app.view.size;
+    var dpr = app.view.dpr;
+    var pad = app.view.pad;
+    var step = app.view.step;
+    var edge = pad + (BOARD_SIZE - 1) * step;
+    var palette = getPalette();
+
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size, size);
 
-    var palette = getPalette();
-    var pad = size * BOARD_PAD_RATIO;
-    var step = (size - pad * 2) / (BOARD_SIZE - 1);
-    var edge = pad + (BOARD_SIZE - 1) * step;
+    // 底色渐变
+    var bg = ctx.createLinearGradient(0, 0, size, size);
+    bg.addColorStop(0, palette.boardTop);
+    bg.addColorStop(1, palette.boardBottom);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, size, size);
 
-    // 底色
-    ctx.fillStyle = palette.boardBg;
+    // 四周暗角，增加卡面层次
+    var vignette = ctx.createRadialGradient(size * 0.5, size * 0.44, size * 0.22, size * 0.5, size * 0.5, size * 0.78);
+    vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vignette.addColorStop(1, palette.vignette);
+    ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, size, size);
 
     // 网格
     ctx.strokeStyle = palette.line;
-    ctx.lineWidth = 1;
+    ctx.lineWidth = Math.max(0.75, step * 0.028);
     ctx.beginPath();
     for (var i = 0; i < BOARD_SIZE; i++) {
       var p = pad + i * step;
@@ -710,33 +836,33 @@
 
     // 外框
     ctx.strokeStyle = palette.lineStrong;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(pad - 0.5, pad - 0.5, edge - pad + 1, edge - pad + 1);
+    ctx.lineWidth = Math.max(1.1, step * 0.06);
+    ctx.strokeRect(pad, pad, edge - pad, edge - pad);
 
-    // 星位（天元 + 四星）
+    // 星位
     var stars = [[3, 3], [3, 11], [7, 7], [11, 3], [11, 11]];
-    ctx.fillStyle = palette.lineStrong;
+    ctx.fillStyle = palette.star;
     for (var s = 0; s < stars.length; s++) {
       ctx.beginPath();
-      ctx.arc(pad + stars[s][0] * step, pad + stars[s][1] * step, Math.max(2, step * 0.08), 0, Math.PI * 2);
+      ctx.arc(pad + stars[s][0] * step, pad + stars[s][1] * step, Math.max(2, step * 0.075), 0, Math.PI * 2);
       ctx.fill();
     }
 
     var state = app.state;
     var board = state && Array.isArray(state.board) ? state.board : null;
-    var radius = step * 0.42;
+    var radius = step * 0.43;
 
-    // 胜利连线（画在棋子下方）
+    // 胜利连线（画在棋子下面，FX 层额外做光晕）
     if (state && Array.isArray(state.winLine) && state.winLine.length >= 2) {
       var first = state.winLine[0];
-      var last = state.winLine[state.winLine.length - 1];
-      if (Array.isArray(first) && Array.isArray(last)) {
+      var lastPoint = state.winLine[state.winLine.length - 1];
+      if (Array.isArray(first) && Array.isArray(lastPoint)) {
         ctx.strokeStyle = palette.winLine;
         ctx.lineWidth = Math.max(4, step * 0.5);
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(pad + first[0] * step, pad + first[1] * step);
-        ctx.lineTo(pad + last[0] * step, pad + last[1] * step);
+        ctx.lineTo(pad + lastPoint[0] * step, pad + lastPoint[1] * step);
         ctx.stroke();
       }
     }
@@ -752,20 +878,7 @@
       }
     }
 
-    // 胜利棋子描圈
-    if (state && Array.isArray(state.winLine)) {
-      ctx.strokeStyle = palette.winRing;
-      ctx.lineWidth = Math.max(2, step * 0.09);
-      for (var w = 0; w < state.winLine.length; w++) {
-        var point = state.winLine[w];
-        if (!Array.isArray(point)) continue;
-        ctx.beginPath();
-        ctx.arc(pad + point[0] * step, pad + point[1] * step, radius + Math.max(2, step * 0.1), 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
-
-    // 最后一手标记
+    // 最后一手标记（静态圆点，动画在 FX 层）
     if (state && state.lastMove && board) {
       var lm = state.lastMove;
       var lx = Number(lm.x);
@@ -775,21 +888,148 @@
         if (lv === 1 || lv === 2) {
           ctx.fillStyle = lv === 1 ? palette.markOnBlack : palette.markOnWhite;
           ctx.beginPath();
-          ctx.arc(pad + lx * step, pad + ly * step, Math.max(2, radius * 0.22), 0, Math.PI * 2);
+          ctx.arc(pad + lx * step, pad + ly * step, Math.max(2, radius * 0.2), 0, Math.PI * 2);
           ctx.fill();
         }
       }
     }
   }
 
+  function hasWinLine() {
+    return !!(app.state && Array.isArray(app.state.winLine) && app.state.winLine.length >= 2);
+  }
+
+  function drawFx(now) {
+    if (!app.view.ready || !ui.boardFx || !ui.boardFx.getContext) return;
+    var ctx = ui.boardFx.getContext('2d');
+    if (!ctx) return;
+    var size = app.view.size;
+    var dpr = app.view.dpr;
+    var pad = app.view.pad;
+    var step = app.view.step;
+    var radius = step * 0.43;
+    var palette = getPalette();
+    var time = typeof now === 'number' ? now : window.performance.now();
+    var state = app.state;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+
+    // 胜利光晕
+    if (hasWinLine()) {
+      var line = state.winLine;
+      var first = line[0];
+      var lastPoint = line[line.length - 1];
+      if (Array.isArray(first) && Array.isArray(lastPoint)) {
+        var pulse = prefersReducedMotion() ? 0.8 : 0.6 + 0.22 * Math.sin(time / 600);
+        ctx.save();
+        ctx.globalAlpha = pulse;
+        ctx.strokeStyle = palette.winGlow;
+        ctx.lineWidth = Math.max(6, step * 0.6);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.shadowColor = palette.winGlow;
+        ctx.shadowBlur = Math.max(10, step * 0.8);
+        ctx.beginPath();
+        ctx.moveTo(pad + first[0] * step, pad + first[1] * step);
+        ctx.lineTo(pad + lastPoint[0] * step, pad + lastPoint[1] * step);
+        ctx.stroke();
+
+        ctx.shadowBlur = Math.max(6, step * 0.4);
+        ctx.strokeStyle = palette.winRing;
+        ctx.lineWidth = Math.max(1.4, step * 0.09);
+        for (var w = 0; w < line.length; w++) {
+          if (!Array.isArray(line[w])) continue;
+          ctx.beginPath();
+          ctx.arc(
+            pad + line[w][0] * step,
+            pad + line[w][1] * step,
+            radius + Math.max(2, step * 0.16),
+            0,
+            Math.PI * 2
+          );
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
+    // 最后一手落子动画：扩散圆环 + 微光
+    if (app.fx.moveStart) {
+      var elapsed = time - app.fx.moveStart;
+      if (elapsed >= 0 && elapsed < MOVE_ANIM_MS) {
+        var progress = elapsed / MOVE_ANIM_MS;
+        var eased = 1 - Math.pow(1 - progress, 3);
+        var lm = state && state.lastMove;
+        if (lm && typeof lm.x === 'number' && typeof lm.y === 'number') {
+          var cx = pad + lm.x * step;
+          var cy = pad + lm.y * step;
+          ctx.save();
+          ctx.globalAlpha = (1 - progress) * 0.6;
+          ctx.strokeStyle = palette.winRing;
+          ctx.lineWidth = Math.max(1.5, step * 0.07);
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius * (1.05 + eased * 0.85), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      } else if (elapsed >= MOVE_ANIM_MS) {
+        app.fx.moveStart = 0;
+      }
+    }
+
+    // 悬停幽灵棋子
+    var hover = app.fx.hover;
+    if (hover && canPlayNow() && state && Array.isArray(state.board) && !state.board[hover.y * BOARD_SIZE + hover.x]) {
+      var gx = pad + hover.x * step;
+      var gy = pad + hover.y * step;
+      var ghostColor = app.color === 1 ? 1 : 2;
+      drawStone(ctx, gx, gy, radius, ghostColor, palette, {
+        alpha: app.color === 1 ? 0.34 : 0.55,
+        ghost: true
+      });
+      ctx.save();
+      ctx.strokeStyle = palette.ghostRing;
+      ctx.lineWidth = Math.max(1, step * 0.045);
+      ctx.setLineDash([step * 0.2, step * 0.16]);
+      ctx.beginPath();
+      ctx.arc(gx, gy, radius * 1.14, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function needsFxLoop(now) {
+    if (document.hidden) return false;
+    if (app.fx.moveStart && now - app.fx.moveStart < MOVE_ANIM_MS) return true;
+    if (hasWinLine() && !prefersReducedMotion()) return true;
+    return false;
+  }
+
+  function requestFxFrame() {
+    if (app.fx.raf) return;
+    var tick = function (now) {
+      app.fx.raf = null;
+      drawFx(now);
+      if (needsFxLoop(now)) app.fx.raf = window.requestAnimationFrame(tick);
+    };
+    app.fx.raf = window.requestAnimationFrame(tick);
+  }
+
+  function redrawBoard() {
+    if (!layoutCanvases()) return;
+    drawBoardBase();
+    drawFx(window.performance.now());
+    requestFxFrame();
+  }
+
   function eventToPoint(ev) {
     var rect = ui.board.getBoundingClientRect();
     var size = Math.floor(Math.min(rect.width, rect.height));
-    if (size < 60) return null;
+    if (size < 40) return null;
     var pad = size * BOARD_PAD_RATIO;
     var step = (size - pad * 2) / (BOARD_SIZE - 1);
 
-    // 画布为正方形；若存在 1px 级差异，按显示尺寸归一化
     var scaleX = rect.width ? size / rect.width : 1;
     var scaleY = rect.height ? size / rect.height : 1;
     var px = (ev.clientX - rect.left) * scaleX;
@@ -802,12 +1042,11 @@
     var cx = pad + ix * step;
     var cy = pad + iy * step;
     var dist = Math.sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
-    if (dist > step * 0.5) return null; // 点击容差：半格
-
+    if (dist > step * 0.5) return null;
     return { x: ix, y: iy };
   }
 
-  /* ============================ 交互 ============================ */
+  /* ============================ 对局交互 ============================ */
 
   async function sendMove(x, y) {
     if (!app.roomId || !app.token || app.movePending) return;
@@ -843,10 +1082,9 @@
       }
       return;
     }
-    if (state.turn !== app.color) return; // 未轮到自己，静默忽略
+    if (state.turn !== app.color) return;
     if (app.movePending) return;
 
-    // 对手还没加入时先别落子，避免出现「一个人下满棋盘」
     var other = otherSeat();
     if (other && !app.seen[other] && !(state.moves > 0)) {
       toast('等待对手加入房间…');
@@ -859,7 +1097,35 @@
       toast('这里已经有棋子了');
       return;
     }
+    app.fx.hover = point;
+    requestFxFrame();
     sendMove(point.x, point.y);
+  }
+
+  function onBoardPointerMove(ev) {
+    if (ev && ev.pointerType && ev.pointerType !== 'mouse') return;
+    if (!ui.board || !ui.boardFx) return;
+    if (!canPlayNow()) {
+      if (app.fx.hover) {
+        app.fx.hover = null;
+        requestFxFrame();
+      }
+      return;
+    }
+    var point = eventToPoint(ev);
+    var previous = app.fx.hover;
+    var changed = (!point && previous) || (point && (!previous || previous.x !== point.x || previous.y !== point.y));
+    if (changed) {
+      app.fx.hover = point;
+      requestFxFrame();
+    }
+  }
+
+  function onBoardPointerLeave() {
+    if (app.fx.hover) {
+      app.fx.hover = null;
+      requestFxFrame();
+    }
   }
 
   async function restartRound() {
@@ -877,7 +1143,6 @@
       updateRestartButton();
       return;
     }
-    // 等待 SSE 推送新的 state；若迟迟未到则恢复按钮可点
     setTimeout(function () {
       if (app.restartPending) {
         app.restartPending = false;
@@ -923,11 +1188,8 @@
       copied = false;
     }
     if (!copied) copied = fallbackCopy(url);
-    if (copied) {
-      toast('邀请链接已复制');
-    } else {
-      toast('复制失败，请从地址栏复制链接', 'error');
-    }
+    if (copied) toast('邀请链接已复制');
+    else toast('复制失败，请从地址栏复制链接', 'error');
   }
 
   function onJoinSubmit(ev) {
@@ -942,24 +1204,426 @@
     joinByCode(code);
   }
 
+  /* ============================ 背景音乐 ============================ */
+
+  function currentTrack() {
+    return app.music.tracks[app.music.index] || null;
+  }
+
+  function clearMusicWatchdog() {
+    if (app.music.watchdog) {
+      clearTimeout(app.music.watchdog);
+      app.music.watchdog = null;
+    }
+  }
+
+  function startMusicWatchdog(attemptId) {
+    clearMusicWatchdog();
+    app.music.watchdog = setTimeout(function () {
+      app.music.watchdog = null;
+      var m = app.music;
+      if (!m.ready) return;
+      if (attemptId !== undefined && attemptId !== m.attemptId) return;
+      if (!ui.audio.paused && !ui.audio.ended) return;
+      if (m.pendingPlay) onTrackFailure(attemptId);
+    }, MUSIC_WATCHDOG_MS);
+  }
+
+  function normalizeTrack(track) {
+    if (!track || typeof track.url !== 'string' || !track.url.trim()) return null;
+    return {
+      title: String(track.title || '未命名曲目'),
+      artist: String(track.artist || 'Kevin MacLeod'),
+      url: track.url.trim(),
+      license: String(track.license || 'CC BY 4.0'),
+      licenseUrl: String(track.licenseUrl || track.source || 'https://incompetech.com/music/royalty-free/'),
+      mood: String(track.mood || '')
+    };
+  }
+
+  function setMusicDisabled(message) {
+    var m = app.music;
+    m.ready = false;
+    m.available = false;
+    m.playing = false;
+    m.intent = false;
+    m.pendingPlay = false;
+    clearMusicWatchdog();
+    if (ui.musicBar) ui.musicBar.classList.remove('is-playing', 'is-loading', 'is-muted');
+    [ui.musicPlay, ui.musicNext, ui.musicMute, ui.musicVolume].forEach(function (el) {
+      if (el) el.disabled = true;
+    });
+    if (ui.audio) {
+      try {
+        ui.audio.pause();
+      } catch (err) {
+        /* 忽略 */
+      }
+    }
+    if (ui.musicTitle) {
+      ui.musicTitle.textContent = '背景音乐';
+      ui.musicTitle.title = '背景音乐不可用';
+      ui.musicTitle.classList.remove('is-scroll');
+    }
+    if (ui.musicArtist) ui.musicArtist.textContent = message || '音乐不可用';
+  }
+
+  function enableMusicControls() {
+    [ui.musicPlay, ui.musicNext, ui.musicMute, ui.musicVolume].forEach(function (el) {
+      if (el) el.disabled = false;
+    });
+  }
+
+  function refreshMarquee() {
+    if (!ui.musicTitle || !musicInfo) return;
+    ui.musicTitle.classList.remove('is-scroll');
+    ui.musicTitle.style.removeProperty('--marquee-shift');
+    ui.musicTitle.style.removeProperty('--marquee-duration');
+    if (prefersReducedMotion()) return;
+    window.requestAnimationFrame(function () {
+      if (!ui.musicTitle || !musicInfo) return;
+      var overflow = ui.musicTitle.scrollWidth - musicInfo.clientWidth;
+      if (overflow > 8) {
+        ui.musicTitle.style.setProperty('--marquee-shift', '-' + Math.round(overflow) + 'px');
+        ui.musicTitle.style.setProperty('--marquee-duration', (9 + overflow / 18).toFixed(1) + 's');
+        ui.musicTitle.classList.add('is-scroll');
+      }
+    });
+  }
+
+  function updateCredit(track) {
+    if (!ui.musicCredit) return;
+    var license = track.license || 'CC BY 4.0';
+    var attribution = '音乐：' + (track.artist || 'Kevin MacLeod') + ' · ' + license;
+    ui.musicCredit.textContent = license;
+    ui.musicCredit.href = track.licenseUrl || 'https://incompetech.com/music/royalty-free/';
+    ui.musicCredit.title = attribution;
+    ui.musicCredit.setAttribute('aria-label', attribution);
+  }
+
+  function updateMusicStatusLabel() {
+    var m = app.music;
+    var track = currentTrack();
+    if (!m.ready || !track || !ui.musicArtist) return;
+    if (m.playing) ui.musicArtist.textContent = track.artist || 'Kevin MacLeod';
+    else if (m.intent) ui.musicArtist.textContent = '点击继续播放';
+    else ui.musicArtist.textContent = '点击播放';
+  }
+
+  function updateMusicPlayingUI() {
+    var audio = ui.audio;
+    var playing = !!(audio && !audio.paused && !audio.ended);
+    app.music.playing = playing;
+    if (ui.musicBar) ui.musicBar.classList.toggle('is-playing', playing);
+    if (ui.musicPlay) {
+      ui.musicPlay.setAttribute('aria-label', playing ? '暂停背景音乐' : '播放背景音乐');
+      ui.musicPlay.title = playing ? '暂停' : '播放';
+    }
+    updateMusicStatusLabel();
+  }
+
+  function updateMuteUI() {
+    var muted = !!app.music.muted;
+    if (ui.musicBar) ui.musicBar.classList.toggle('is-muted', muted);
+    if (ui.musicMute) {
+      ui.musicMute.setAttribute('aria-label', muted ? '取消静音' : '静音');
+      ui.musicMute.title = muted ? '取消静音' : '静音';
+    }
+  }
+
+  function updateTrackLabels(track) {
+    if (ui.musicTitle) {
+      ui.musicTitle.textContent = track.title;
+      ui.musicTitle.title = track.title + (track.artist ? ' · ' + track.artist : '');
+    }
+    updateCredit(track);
+    refreshMarquee();
+    updateMusicStatusLabel();
+  }
+
+  function selectTrack(index, options) {
+    options = options || {};
+    var m = app.music;
+    if (!m.tracks.length) return;
+    m.index = ((index % m.tracks.length) + m.tracks.length) % m.tracks.length;
+    storageSet(LS_MUSIC.index, String(m.index));
+    var track = m.tracks[m.index];
+    m.attemptId += 1;
+    var attemptId = m.attemptId;
+    clearMusicWatchdog();
+    m.pendingPlay = !!options.autoplay;
+    if (ui.audio) {
+      // 只设置 src，不主动 load()：preload="none" 下真正加载要等用户点击 play()，
+      // 避免页面一打开就白耗流量拉取整首 mp3。
+      ui.audio.src = track.url;
+    }
+    updateTrackLabels(track);
+    updateMusicPlayingUI();
+
+    if (options.autoplay) {
+      m.intent = true;
+      storageSet(LS_MUSIC.playing, '1');
+      startMusicWatchdog(attemptId);
+      var promise = ui.audio.play();
+      if (promise && typeof promise.catch === 'function') {
+        promise.catch(function (err) {
+          handlePlayRejection(err, attemptId);
+        });
+      }
+    }
+  }
+
+  function restoreMusic() {
+    var m = app.music;
+    var storedVolume = parseFloat(storageGet(LS_MUSIC.volume));
+    if (isFinite(storedVolume) && storedVolume >= 0) m.volume = Math.min(1, storedVolume);
+    else m.volume = 0.5;
+    m.muted = storageGet(LS_MUSIC.muted) === '1';
+    ui.audio.volume = m.volume;
+    ui.audio.muted = m.muted;
+    if (ui.musicVolume) ui.musicVolume.value = String(Math.round(m.volume * 100));
+    updateMuteUI();
+
+    var storedIndex = parseInt(storageGet(LS_MUSIC.index), 10);
+    if (!isFinite(storedIndex) || storedIndex < 0 || storedIndex >= m.tracks.length) storedIndex = 0;
+    m.intent = storageGet(LS_MUSIC.playing) === '1';
+    enableMusicControls();
+    selectTrack(storedIndex, { autoplay: false });
+    updateMusicPlayingUI();
+    if (m.intent) armResumeOnGesture();
+  }
+
+  async function loadPlaylist() {
+    if (!ui.audio) return;
+    if (ui.musicBar) ui.musicBar.classList.add('is-loading');
+    try {
+      var response = await fetch(PLAYLIST_URL, { cache: 'no-cache' });
+      if (!response.ok) throw new Error('playlist_http_' + response.status);
+      var data = await response.json();
+      var raw = data && Array.isArray(data.tracks) ? data.tracks : [];
+      var tracks = raw.map(normalizeTrack).filter(Boolean);
+      if (!tracks.length) throw new Error('playlist_empty');
+      app.music.tracks = tracks;
+      app.music.ready = true;
+      app.music.available = true;
+      restoreMusic();
+    } catch (err) {
+      setMusicDisabled('音乐不可用');
+    } finally {
+      if (ui.musicBar) ui.musicBar.classList.remove('is-loading');
+    }
+  }
+
+  function armResumeOnGesture() {
+    if (app.music.resumeArmed) return;
+    app.music.resumeArmed = true;
+    var handler = function (ev) {
+      // 点击音乐胶囊内部时交给按钮自身处理，避免刚恢复又被暂停
+      if (ev && ev.target && ui.musicBar && ui.musicBar.contains(ev.target)) return;
+      detach();
+      var m = app.music;
+      if (!m.ready || m.playing || !m.intent) return;
+      attemptPlay();
+    };
+    var detach = function () {
+      document.removeEventListener('pointerdown', handler, true);
+      document.removeEventListener('keydown', handler, true);
+      app.music.resumeArmed = false;
+    };
+    document.addEventListener('pointerdown', handler, true);
+    document.addEventListener('keydown', handler, true);
+  }
+
+  function handlePlayRejection(err, attemptId) {
+    var m = app.music;
+    if (attemptId !== undefined && attemptId !== m.attemptId) return; // 旧曲目的迟到事件，忽略
+    m.pendingPlay = false;
+    clearMusicWatchdog();
+    if (err && err.name === 'NotAllowedError') {
+      m.intent = false;
+      storageSet(LS_MUSIC.playing, '0');
+      updateMusicPlayingUI();
+      return;
+    }
+    onTrackFailure(attemptId);
+  }
+
+  function onTrackFailure(attemptId) {
+    var m = app.music;
+    if (!m.ready) return;
+    if (attemptId !== undefined && attemptId !== m.attemptId) return; // 旧曲目的迟到事件，忽略
+    if (m.failureHandledId === m.attemptId) return; // 同一首只处理一次失败
+    m.failureHandledId = m.attemptId;
+    clearMusicWatchdog();
+    m.pendingPlay = false;
+    var now = Date.now();
+    if (now - m.lastErrorAt > 900) {
+      toast('音乐源暂不可用');
+      m.lastErrorAt = now;
+    }
+    m.failures += 1;
+    if (m.failures >= m.tracks.length) {
+      m.intent = false;
+      storageSet(LS_MUSIC.playing, '0');
+      setMusicDisabled('音乐源暂不可用');
+      return;
+    }
+    selectTrack(m.index + 1, { autoplay: m.intent });
+  }
+
+  function attemptPlay() {
+    var m = app.music;
+    if (!m.ready || !m.tracks.length) return;
+    if (!ui.audio.getAttribute('src')) selectTrack(m.index, { autoplay: false });
+    m.intent = true;
+    storageSet(LS_MUSIC.playing, '1');
+    m.pendingPlay = true;
+    var attemptId = m.attemptId;
+    startMusicWatchdog(attemptId);
+    var promise = ui.audio.play();
+    if (promise && typeof promise.catch === 'function') {
+      promise.catch(function (err) {
+        handlePlayRejection(err, attemptId);
+      });
+    }
+  }
+
+  function pauseMusic() {
+    var m = app.music;
+    if (ui.audio) ui.audio.pause();
+    m.intent = false;
+    m.pendingPlay = false;
+    clearMusicWatchdog();
+    storageSet(LS_MUSIC.playing, '0');
+    updateMusicPlayingUI();
+  }
+
+  function onMusicPlayClick() {
+    var m = app.music;
+    if (!m.ready) return;
+    if (!ui.audio.paused && !ui.audio.ended) {
+      pauseMusic();
+      return;
+    }
+    attemptPlay();
+  }
+
+  function onMusicNextClick() {
+    var m = app.music;
+    if (!m.ready) return;
+    var shouldPlay = m.intent || (!ui.audio.paused && !ui.audio.ended);
+    selectTrack(m.index + 1, { autoplay: shouldPlay });
+    if (shouldPlay) m.intent = true;
+    else updateMusicPlayingUI();
+  }
+
+  function bindMusicEvents() {
+    if (!ui.audio) return;
+
+    if (ui.musicPlay) ui.musicPlay.addEventListener('click', onMusicPlayClick);
+    if (ui.musicNext) ui.musicNext.addEventListener('click', onMusicNextClick);
+
+    if (ui.musicMute) {
+      ui.musicMute.addEventListener('click', function () {
+        var m = app.music;
+        m.muted = !m.muted;
+        ui.audio.muted = m.muted;
+        storageSet(LS_MUSIC.muted, m.muted ? '1' : '0');
+        updateMuteUI();
+      });
+    }
+
+    if (ui.musicVolume) {
+      ui.musicVolume.addEventListener('input', function () {
+        var value = Math.min(1, Math.max(0, Number(ui.musicVolume.value) / 100));
+        if (!isFinite(value)) return;
+        app.music.volume = value;
+        ui.audio.volume = value;
+        storageSet(LS_MUSIC.volume, String(Math.round(value * 100) / 100));
+        if (value > 0 && ui.audio.muted) {
+          ui.audio.muted = false;
+          app.music.muted = false;
+          storageSet(LS_MUSIC.muted, '0');
+          updateMuteUI();
+        }
+      });
+    }
+
+    ui.audio.addEventListener('playing', function () {
+      var m = app.music;
+      clearMusicWatchdog();
+      m.pendingPlay = false;
+      m.failures = 0;
+      m.failureHandledId = 0;
+      m.intent = true;
+      storageSet(LS_MUSIC.playing, '1');
+      updateMusicPlayingUI();
+    });
+
+    ui.audio.addEventListener('pause', function () {
+      updateMusicPlayingUI();
+    });
+
+    ui.audio.addEventListener('ended', function () {
+      var m = app.music;
+      if (!m.ready) return;
+      selectTrack(m.index + 1, { autoplay: m.intent });
+    });
+
+    ui.audio.addEventListener('error', function () {
+      if (!app.music.ready) return;
+      if (!ui.audio.getAttribute('src')) return;
+      onTrackFailure(app.music.attemptId);
+    });
+
+    ui.audio.addEventListener('volumechange', function () {
+      if (!ui.musicVolume) return;
+      if (document.activeElement === ui.musicVolume) return;
+      ui.musicVolume.value = String(Math.round(ui.audio.volume * 100));
+    });
+  }
+
   /* ============================ 初始化 ============================ */
 
   function setupResize() {
-    var redraw = function () {
-      drawBoard();
+    var schedule = function () {
+      window.requestAnimationFrame(function () {
+        redrawBoard();
+      });
     };
-    if (typeof ResizeObserver !== 'undefined' && ui.board.parentElement) {
-      var observer = new ResizeObserver(redraw);
+    var debounce = function (fn, wait) {
+      var timer = null;
+      return function () {
+        clearTimeout(timer);
+        timer = setTimeout(fn, wait);
+      };
+    };
+    if (typeof ResizeObserver !== 'undefined' && ui.board && ui.board.parentElement) {
+      var observer = new ResizeObserver(schedule);
       observer.observe(ui.board.parentElement);
     }
-    var timer = null;
-    window.addEventListener('resize', function () {
-      clearTimeout(timer);
-      timer = setTimeout(redraw, 80);
-    });
+    window.addEventListener('resize', debounce(schedule, 80));
     window.addEventListener('orientationchange', function () {
-      setTimeout(redraw, 150);
+      setTimeout(schedule, 150);
     });
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        if (app.fx.raf) {
+          window.cancelAnimationFrame(app.fx.raf);
+          app.fx.raf = null;
+        }
+      } else {
+        redrawBoard();
+      }
+    });
+    if (reducedMotionQuery) {
+      var onMotionChange = function () {
+        refreshMarquee();
+        redrawBoard();
+      };
+      if (reducedMotionQuery.addEventListener) reducedMotionQuery.addEventListener('change', onMotionChange);
+      else if (reducedMotionQuery.addListener) reducedMotionQuery.addListener(onMotionChange);
+    }
   }
 
   function bindEvents() {
@@ -973,7 +1637,14 @@
     ui.copyBtn.addEventListener('click', copyInvite);
     ui.restartBtn.addEventListener('click', restartRound);
     ui.leaveBtn.addEventListener('click', leaveToLobby);
+
     ui.board.addEventListener('click', onBoardClick);
+    ui.board.addEventListener('pointermove', onBoardPointerMove);
+    ui.board.addEventListener('pointerleave', onBoardPointerLeave);
+    ui.board.addEventListener('pointercancel', onBoardPointerLeave);
+    ui.board.addEventListener('blur', onBoardPointerLeave);
+
+    bindMusicEvents();
   }
 
   function init() {
@@ -981,11 +1652,10 @@
     bindEvents();
     setupResize();
     showLobby();
+    loadPlaylist();
 
     var roomFromUrl = getRoomFromUrl();
-    if (roomFromUrl) {
-      autoJoinFromUrl(roomFromUrl);
-    }
+    if (roomFromUrl) autoJoinFromUrl(roomFromUrl);
   }
 
   init();

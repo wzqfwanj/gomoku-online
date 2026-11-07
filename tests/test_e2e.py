@@ -51,6 +51,11 @@ def click_point(page, x, y):
     page.mouse.click(box["x"] + pad + x * step, box["y"] + pad + y * step)
 
 
+def goto(page, url):
+    """统一用 domcontentloaded，避免外链音乐流影响 networkidle 判定。"""
+    page.goto(url, wait_until="domcontentloaded")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8086)
@@ -64,6 +69,7 @@ def main():
     os.makedirs(shots, exist_ok=True)
 
     errors = []
+    music_requests = []
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(channel="msedge", headless=True)
@@ -85,33 +91,79 @@ def main():
                 if msg.type == "error"
                 else None,
             )
+        page_a.on("request", lambda req: music_requests.append(req.url) if "incompetech.com" in req.url else None)
 
         print("[1] A 创建房间")
-        page_a.goto(base, wait_until="networkidle")
+        goto(page_a, base)
+        expect(page_a.locator("#create-btn")).to_be_visible(timeout=8000)
         check("大厅标题", page_a.locator("h1").inner_text() == "五子棋")
+        check("彩色氛围背景存在", page_a.locator(".aurora").count() == 1)
+        page_a.screenshot(path=os.path.join(shots, "00-lobby-light.png"), full_page=True)
+
+        print("[2] 背景音乐（默认关闭、点按钮播放）")
+        expect(page_a.locator("#music-play")).to_be_enabled(timeout=12000)
+        check("音乐控件可见", page_a.locator("#music-bar").is_visible())
+        check("默认关闭", page_a.evaluate("document.getElementById('music-audio').paused") is True)
+        check("默认不拉取 mp3（按需加载）", not music_requests, str(music_requests[:2]))
+        check("曲名已展示", page_a.locator("#music-title").inner_text().strip() not in ("", "背景音乐"),
+              page_a.locator("#music-title").inner_text())
+        first_title = page_a.locator("#music-title").inner_text().strip()
+        page_a.locator("#music-play").click()
+        playing = False
+        deadline = time.time() + 25
+        while time.time() < deadline:
+            if page_a.evaluate(
+                "!document.getElementById('music-audio').paused && document.getElementById('music-audio').currentTime > 0"
+            ):
+                playing = True
+                break
+            time.sleep(0.4)
+        check("点击后开始播放", playing, page_a.locator("#music-artist").inner_text())
+        check("播放时请求外链音乐", bool(music_requests), str(music_requests[:1]))
+        check("播放时 UI 显示播放态", "is-playing" in (page_a.locator("#music-bar").get_attribute("class") or ""))
+        page_a.screenshot(path=os.path.join(shots, "01-lobby-music.png"), full_page=True)
+
+        page_a.locator("#music-next").click()
+        page_a.wait_for_timeout(900)
+        second_title = page_a.locator("#music-title").inner_text().strip()
+        check("下一首切换曲目", second_title != first_title, "%s -> %s" % (first_title, second_title))
+        page_a.evaluate(
+            "var v=document.getElementById('music-volume'); v.value='70';"
+            "v.dispatchEvent(new Event('input',{bubbles:true}));"
+        )
+        check("音量生效", abs(page_a.evaluate("document.getElementById('music-audio').volume") - 0.7) < 0.02)
+        check("音量记忆", page_a.evaluate("localStorage.getItem('gomoku:music:volume')") == "0.7")
+        page_a.locator("#music-play").click()
+        page_a.wait_for_timeout(500)
+        check("暂停生效", page_a.evaluate("document.getElementById('music-audio').paused") is True)
+        check("CC BY 署名存在", "CC BY" in page_a.locator("#music-credit").inner_text(),
+              page_a.locator("#music-credit").inner_text())
+
+        print("[3] A 创建房间")
         page_a.locator("#create-btn").click()
         expect(page_a.locator("#view-game")).to_be_visible(timeout=8000)
+        check("棋盘特效画布存在", page_a.locator("#board-fx").count() == 1)
         room = page_a.locator("#room-code").inner_text().strip()
         check("房号 6 位", len(room) == 6, room)
         check("URL 带房间参数", ("room=" + room) in page_a.url, page_a.url)
         wait_status(page_a, "等待对手加入房间")
         check("A 等待对手", "等待对手加入房间" in status_text(page_a))
 
-        print("[2] B 通过邀请链接加入")
-        page_b.goto(base + "?room=" + room, wait_until="networkidle")
+        print("[4] B 通过邀请链接加入")
+        goto(page_b, base + "?room=" + room)
         wait_status(page_b, "等待对手落子")
         wait_status(page_a, "轮到你落子")
         check("B 执白等待", "等待对手落子" in status_text(page_b))
         check("A 轮到自己", "轮到你落子" in status_text(page_a))
 
-        print("[3] C 观战")
-        page_c.goto(base + "?room=" + room, wait_until="networkidle")
+        print("[5] C 观战")
+        goto(page_c, base + "?room=" + room)
         wait_status(page_c, "观战中")
         check("C 观战状态", "观战中" in status_text(page_c))
         check("A 看到观战人数", "观战 1 人" in page_a.locator("#presence").inner_text(),
               page_a.locator("#presence").inner_text())
 
-        print("[4] 画布点击对弈（黑方横向五连）")
+        print("[6] 画布点击对弈（黑方横向五连）")
         moves = [
             (page_a, 7, 7), (page_b, 0, 0),
             (page_a, 8, 7), (page_b, 0, 1),
@@ -129,7 +181,7 @@ def main():
         check("观战者同步结果", "观战" in status_text(page_c), status_text(page_c))
         page_a.screenshot(path=os.path.join(shots, "01-win-light.png"), full_page=True)
 
-        print("[5] 双方再来一局")
+        print("[7] 双方再来一局")
         page_a.locator("#restart-btn").click()
         wait_status(page_a, "你已准备再来一局", timeout=5)
         page_b.locator("#restart-btn").click()
@@ -139,13 +191,15 @@ def main():
         check("重开后白方等待", "等待对手落子" in status_text(page_b))
         check("重开后按钮恢复", page_a.locator("#restart-btn").is_visible())
 
-        print("[6] 刷新保持座位")
-        page_a.reload(wait_until="networkidle")
+        print("[8] 刷新保持座位")
+        page_a.reload(wait_until="domcontentloaded")
         wait_status(page_a, "轮到你落子", timeout=8)
+        expect(page_a.locator("#music-play")).to_be_enabled(timeout=10000)
         check("刷新后仍是黑方", "轮到你落子" in status_text(page_a), status_text(page_a))
         check("刷新后 B 未掉线", "等待对手落子" in status_text(page_b), status_text(page_b))
+        check("刷新后音乐仍默认暂停", page_a.evaluate("document.getElementById('music-audio').paused") is True)
 
-        print("[7] 明暗主题切换")
+        print("[9] 明暗主题切换")
         page_a.locator("#theme-toggle").click()
         page_a.wait_for_timeout(400)
         theme_dark = page_a.evaluate("document.documentElement.dataset.theme")
@@ -156,15 +210,15 @@ def main():
         theme_light = page_a.evaluate("document.documentElement.dataset.theme")
         check("切回浅色", theme_light == "light", str(theme_light))
 
-        print("[8] 移动端适配")
-        page_m.goto(base, wait_until="networkidle")
+        print("[10] 移动端适配")
+        goto(page_m, base)
         check("移动端大厅可见", page_m.locator("#create-btn").is_visible())
         page_m.screenshot(path=os.path.join(shots, "03-mobile-light.png"), full_page=True)
         check("无横向滚动", page_m.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
 
         browser.close()
 
-    print("[9] 控制台错误检查")
+    print("[11] 控制台错误检查")
     real_errors = [e for e in errors if "favicon" not in e.lower()]
     check("无 JS/控制台错误", not real_errors, "; ".join(real_errors[:5]))
 

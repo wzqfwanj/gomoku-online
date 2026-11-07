@@ -1,0 +1,95 @@
+{
+  "tracks": [
+    {
+      "title": "Happy Alley",
+      "artist": "Kevin MacLeod",
+      "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Happy%20Alley.mp3",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "source": "Incompetech",
+      "mood": "upbeat",
+      "genre": "Pop",
+      "length": "1:20",
+      "sizeBytes": 3316821,
+      "sizeMB": 3.32
+    },
+    {
+      "title": "Move Forward",
+      "artist": "Kevin MacLeod",
+      "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Move%20Forward.mp3",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "source": "Incompetech",
+      "mood": "playful",
+      "genre": "Electronica",
+      "length": "1:09",
+      "sizeBytes": 2772289,
+      "sizeMB": 2.77
+    },
+    {
+      "title": "Neon Laser Horizon",
+      "artist": "Kevin MacLeod",
+      "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Neon%20Laser%20Horizon.mp3",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "source": "Incompetech",
+      "mood": "grooving",
+      "genre": "Contemporary",
+      "length": "2:59",
+      "sizeBytes": 3573716,
+      "sizeMB": 3.57
+    },
+    {
+      "title": "The Forest and the Trees",
+      "artist": "Kevin MacLeod",
+      "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/The%20Forest%20and%20the%20Trees.mp3",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "source": "Incompetech",
+      "mood": "calm",
+      "genre": "Contemporary",
+      "length": "1:34",
+      "sizeBytes": 3772033,
+      "sizeMB": 3.77
+    },
+    {
+      "title": "Heartwarming",
+      "artist": "Kevin MacLeod",
+      "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Heartwarming.mp3",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "source": "Incompetech",
+      "mood": "warm",
+      "genre": "Contemporary",
+      "length": "1:12",
+      "sizeBytes": 2971312,
+      "sizeMB": 2.97
+    },
+    {
+      "title": "Surf Shimmy",
+      "artist": "Kevin MacLeod",
+      "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Surf%20Shimmy.mp3",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "source": "Incompetech",
+      "mood": "lively",
+      "genre": "Rock",
+      "length": "2:03",
+      "sizeBytes": 3934390,
+      "sizeMB": 3.93
+    },
+    {
+      "title": "Open Those Bright Eyes",
+      "artist": "Kevin MacLeod",
+      "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Open%20Those%20Bright%20Eyes.mp3",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "source": "Incompetech",
+      "mood": "cheerful",
+      "genre": "Soundtrack",
+      "length": "1:28",
+      "sizeBytes": 3526447,
+      "sizeMB": 3.53
+    }
+  ]
+}

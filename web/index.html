@@ -3,16 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; media-src 'self' blob: https://incompetech.com; base-uri 'none'; form-action 'self'">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f5f5f5" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#101010" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eef1f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
+<meta name="description" content="极简黑白风格的联网五子棋：创建房间、邀请好友、实时对弈。">
 <title>五子棋</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 <script src="app.js" defer></script>
 </head>
 <body>
+<div class="aurora" aria-hidden="true">
+  <i class="aurora-blob aurora-blob--a"></i>
+  <i class="aurora-blob aurora-blob--b"></i>
+  <i class="aurora-blob aurora-blob--c"></i>
+  <i class="aurora-blob aurora-blob--d"></i>
+</div>
+
 <div class="app">
   <button id="theme-toggle" class="theme-toggle" type="button" title="切换明暗主题" aria-label="切换明暗主题">
     <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -28,28 +36,31 @@
   </button>
 
   <main id="view-lobby" class="view lobby">
-    <header class="lobby-head">
-      <h1 class="title">五子棋</h1>
-      <p class="rule">15×15 棋盘，黑方先行；横、竖、斜任意方向连成五子即胜，棋盘下满则为平局。</p>
-    </header>
+    <div class="lobby-card panel">
+      <header class="lobby-head">
+        <p class="eyebrow">GOMOKU · 实时对弈</p>
+        <h1 class="title">五子棋</h1>
+        <p class="rule">15×15 棋盘，黑方先行；横、竖、斜任意方向连成五子即胜，棋盘下满则为平局。</p>
+      </header>
 
-    <div class="lobby-actions">
-      <button id="create-btn" class="btn btn-primary" type="button">创建房间</button>
+      <div class="lobby-actions">
+        <button id="create-btn" class="btn btn-primary" type="button">创建房间</button>
 
-      <div class="divider"><span>或</span></div>
+        <div class="divider"><span>或</span></div>
 
-      <form id="join-form" class="join-form" novalidate>
-        <label class="sr-only" for="join-code">输入 6 位房号</label>
-        <input id="join-code" class="join-input" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="6" placeholder="输入 6 位房号">
-        <button id="join-submit" class="btn" type="submit">加入房间</button>
-      </form>
+        <form id="join-form" class="join-form" novalidate>
+          <label class="sr-only" for="join-code">输入 6 位房号</label>
+          <input id="join-code" class="join-input" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="6" placeholder="输入 6 位房号">
+          <button id="join-submit" class="btn" type="submit">加入房间</button>
+        </form>
+      </div>
+
+      <p class="hint">创建房间后，把邀请链接发给朋友即可开始对局。</p>
     </div>
-
-    <p class="hint">创建房间后，把邀请链接发给朋友即可开始对局。</p>
   </main>
 
   <main id="view-game" class="view game" hidden>
-    <header class="game-head">
+    <header class="game-head panel">
       <div class="room-info">
         <span class="room-label">房间</span>
         <code id="room-code" class="room-code">------</code>
@@ -60,7 +71,10 @@
     </header>
 
     <div class="board-wrap">
-      <canvas id="board" class="board" width="600" height="600" aria-label="五子棋棋盘">你的浏览器不支持 Canvas，请更换浏览器。</canvas>
+      <div class="board-stage">
+        <canvas id="board" class="board" width="600" height="600" aria-label="五子棋棋盘">你的浏览器不支持 Canvas，请更换浏览器。</canvas>
+        <canvas id="board-fx" class="board-fx" width="600" height="600" aria-hidden="true"></canvas>
+      </div>
     </div>
 
     <footer class="game-actions">
@@ -69,6 +83,48 @@
     </footer>
   </main>
 </div>
+
+<div id="music-bar" class="music-bar" role="group" aria-label="背景音乐播放器">
+  <button id="music-play" class="music-btn music-btn--main" type="button" aria-label="播放背景音乐" title="播放背景音乐" disabled>
+    <svg class="icon icon-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M8.5 5.4v13.2L19 12z" fill="currentColor"></path>
+    </svg>
+    <svg class="icon icon-pause" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M7.4 5.5h3.4v13H7.4zM13.2 5.5h3.4v13h-3.4z" fill="currentColor"></path>
+    </svg>
+  </button>
+
+  <div class="music-info">
+    <span id="music-title" class="music-title">背景音乐</span>
+    <span id="music-artist" class="music-artist">默认关闭</span>
+  </div>
+
+  <span id="music-eq" class="music-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+
+  <button id="music-next" class="music-btn" type="button" aria-label="下一首" title="下一首" disabled>
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M5.8 5.4v13.2L15 12z" fill="currentColor"></path>
+      <path d="M16.6 5.5h2.2v13h-2.2z" fill="currentColor"></path>
+    </svg>
+  </button>
+
+  <button id="music-mute" class="music-btn music-btn--vol" type="button" aria-label="静音" title="静音" disabled>
+    <svg class="icon icon-vol-on" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4 9.3h3.4L12.4 5v14l-5-4.3H4z" fill="currentColor"></path>
+      <path d="M15.6 8.7a4.7 4.7 0 0 1 0 6.6M18.2 6.2a8.2 8.2 0 0 1 0 11.6" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"></path>
+    </svg>
+    <svg class="icon icon-vol-off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4 9.3h3.4L12.4 5v14l-5-4.3H4z" fill="currentColor"></path>
+      <path d="M16 9.2l5 5.6M21 9.2l-5 5.6" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"></path>
+    </svg>
+  </button>
+
+  <input id="music-volume" class="music-volume" type="range" min="0" max="100" step="1" value="50" aria-label="音量" disabled>
+
+  <a id="music-credit" class="music-credit" href="https://incompetech.com/music/royalty-free/" target="_blank" rel="noopener noreferrer" title="音乐：Kevin MacLeod · CC BY 4.0" aria-label="音乐：Kevin MacLeod · CC BY 4.0">CC BY 4.0</a>
+</div>
+
+<audio id="music-audio" preload="none"></audio>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
