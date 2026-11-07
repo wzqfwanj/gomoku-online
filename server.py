@@ -15,7 +15,9 @@ import json
 import os
 import queue
 import secrets
+import select
 import signal
+import socket
 import sys
 import threading
 import time
@@ -211,6 +213,9 @@ class Room:
             color = self._player_color(token)
             if color is None:
                 return "not_player"
+            # 只允许终局后「再来一局」，避免对局中被单方清盘
+            if self.winner == 0:
+                return "game_not_over"
             player = self.players[color]
             player.ready = not player.ready
             both_ready = (
@@ -365,6 +370,11 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_static(path)
 
     def do_POST(self) -> None:  # noqa: N802
+        # 不支持 chunked：避免残留 chunk 字节污染 keep-alive 下的下一条请求
+        if self.headers.get("Transfer-Encoding"):
+            self.close_connection = True
+            self._error(400, "bad_request")
+            return
         parsed = urlparse(self.path)
         raw = self._read_body()
         if raw is None:
@@ -494,13 +504,20 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
         room.attach(box, token)
+        last_ping = time.time()
         try:
             while True:
                 try:
-                    payload = box.get(timeout=15)
+                    payload = box.get(timeout=1.0)
                 except queue.Empty:
-                    self.wfile.write(b": ping\n\n")
-                    self.wfile.flush()
+                    # 主动探测对端关闭：客户端刷新/关页时无需等 15s 心跳写失败
+                    if self._peer_closed():
+                        break
+                    now = time.time()
+                    if now - last_ping >= 15:
+                        self.wfile.write(b": ping\n\n")
+                        self.wfile.flush()
+                        last_ping = now
                     continue
                 self.wfile.write(payload.encode("utf-8"))
                 self.wfile.flush()
@@ -508,6 +525,16 @@ class Handler(BaseHTTPRequestHandler):
             pass
         finally:
             room.detach(box)
+
+    def _peer_closed(self) -> bool:
+        """非阻塞检查 SSE 连接是否已被对端关闭。"""
+        try:
+            readable, _, _ = select.select([self.connection], [], [], 0)
+            if not readable:
+                return False
+            return self.connection.recv(1, socket.MSG_PEEK) == b""
+        except (OSError, ValueError):
+            return True
 
     # -- 日志 -----------------------------------------------------
 

@@ -70,11 +70,16 @@ class SSEClient:
         with self.lock:
             return self.states[-1] if self.states else None
 
-    def wait_for(self, predicate, timeout=5.0, label="state"):
+    def count(self):
+        with self.lock:
+            return len(self.states)
+
+    def wait_for(self, predicate, timeout=5.0, label="state", since=0):
+        """等待从第 since 帧之后新到达、且满足条件的帧（历史帧不参与匹配）。"""
         deadline = time.time() + timeout
         while time.time() < deadline:
             with self.lock:
-                for state in reversed(self.states):
+                for state in reversed(self.states[since:]):
                     if predicate(state):
                         return state
             time.sleep(0.02)
@@ -139,6 +144,8 @@ def main():
     check("非整数 400 invalid_move", body.get("error") == "invalid_move", str(body))
     status, body = post("/api/move", {"roomId": room, "token": black, "x": 0, "y": 0})
     check("黑方落子成功", status == 200 and body.get("ok") is True, str(body))
+    status, body = post("/api/restart", {"roomId": room, "token": black})
+    check("对局中不可重开 400 game_not_over", body.get("error") == "game_not_over", str(body))
     status, body = post("/api/move", {"roomId": room, "token": white, "x": 0, "y": 0})
     check("重复落子 400 invalid_move", body.get("error") == "invalid_move", str(body))
 
@@ -169,11 +176,14 @@ def main():
     check("重开后清空就绪标记", state["players"]["black"]["ready"] is False and state["players"]["white"]["ready"] is False)
 
     print("[7] 断线与重连")
+    # 服务端用 select 主动探测对端关闭（≤1s）+ 3s 去抖广播，故 12s 足够
+    mark = black_sse.count()
     white_sse.close()
-    state = black_sse.wait_for(lambda s: s["players"]["white"]["connected"] is False, timeout=8)
+    state = black_sse.wait_for(lambda s: s["players"]["white"]["connected"] is False, timeout=12, since=mark)
     check("白方断线标记", state["players"]["white"]["connected"] is False)
+    mark = black_sse.count()
     white_sse = SSEClient(room, white)
-    state = black_sse.wait_for(lambda s: s["players"]["white"]["connected"] is True, timeout=8)
+    state = black_sse.wait_for(lambda s: s["players"]["white"]["connected"] is True, timeout=8, since=mark)
     check("白方重连恢复", state["players"]["white"]["connected"] is True)
 
     print("[8] 静态与健康检查")
@@ -183,6 +193,22 @@ def main():
     health = json.loads(resp.read())
     conn.close()
     check("健康检查", resp.status == 200 and health.get("ok") is True, str(health))
+
+    print("[9] 不支持 chunked 请求")
+    conn = http.client.HTTPConnection(HOST, PORT, timeout=5)
+    conn.request(
+        "POST",
+        "/api/room",
+        body=iter([b"{}"]),
+        headers={"Content-Type": "application/json"},
+        encode_chunked=True,
+    )
+    resp = conn.getresponse()
+    body = resp.read()
+    check("chunked 请求 400", resp.status == 400 and b"bad_request" in body, "%s %s" % (resp.status, body))
+    conn.close()
+    status, body = post("/api/room")
+    check("chunked 拒绝后连接仍正常", status == 200 and len(body.get("roomId", "")) == 6, str(body))
 
     for client in (black_sse, white_sse, spec_sse):
         client.close()
