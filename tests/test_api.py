@@ -194,6 +194,20 @@ def main():
     conn.close()
     check("健康检查", resp.status == 200 and health.get("ok") is True, str(health))
 
+    conn = http.client.HTTPConnection(HOST, PORT, timeout=5)
+    conn.request("GET", "/playlist.json")
+    resp = conn.getresponse()
+    raw = resp.read()
+    conn.close()
+    playlist = json.loads(raw.decode("utf-8")) if resp.status == 200 else {}
+    tracks = playlist.get("tracks") if isinstance(playlist, dict) else None
+    check(
+        "播放列表 200 且合法",
+        resp.status == 200 and isinstance(tracks, list) and len(tracks) >= 5
+        and all(str(t.get("url", "")).startswith("https://") for t in tracks),
+        "status=%s tracks=%s" % (resp.status, len(tracks) if isinstance(tracks, list) else tracks),
+    )
+
     print("[9] 不支持 chunked 请求")
     conn = http.client.HTTPConnection(HOST, PORT, timeout=5)
     conn.request(

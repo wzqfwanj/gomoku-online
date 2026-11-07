@@ -1,9 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="五子棋">
-  <rect width="64" height="64" rx="14" fill="#f5f5f5"/>
-  <g stroke="#bdbdbd" stroke-width="2" stroke-linecap="round">
+  <defs>
+    <radialGradient id="bg" cx="35%" cy="30%" r="80%">
+      <stop offset="0" stop-color="#fbfbfb"/>
+      <stop offset="1" stop-color="#e2e2e2"/>
+    </radialGradient>
+    <radialGradient id="black" cx="34%" cy="30%" r="75%">
+      <stop offset="0" stop-color="#4a4a4a"/>
+      <stop offset="0.55" stop-color="#151515"/>
+      <stop offset="1" stop-color="#020202"/>
+    </radialGradient>
+    <radialGradient id="white" cx="34%" cy="30%" r="75%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.6" stop-color="#f2f2f2"/>
+      <stop offset="1" stop-color="#cfcfcf"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="1.4" stdDeviation="1.4" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="14.5" fill="none" stroke="#ffffff" stroke-opacity="0.7"/>
+  <g stroke="#b9b9b9" stroke-width="1.8" stroke-linecap="round">
     <path d="M18 8v48M32 8v48M46 8v48M8 18h48M8 32h48M8 46h48"/>
   </g>
-  <circle cx="18" cy="18" r="9.5" fill="#111111"/>
-  <circle cx="32" cy="32" r="9.5" fill="#ffffff" stroke="#8a8a8a" stroke-width="2"/>
-  <circle cx="46" cy="46" r="9.5" fill="#111111"/>
+  <g filter="url(#soft)">
+    <circle cx="18" cy="18" r="9.2" fill="url(#black)"/>
+    <circle cx="32" cy="32" r="9.2" fill="url(#white)" stroke="#b4b4b4" stroke-width="1.2"/>
+    <circle cx="46" cy="46" r="9.2" fill="url(#black)"/>
+  </g>
 </svg>
