@@ -565,3 +565,58 @@ scp -r .\web dev:/opt/gomoku/
 ssh dev "systemctl restart gomoku"
 # 之后 git checkout 3d732a7 -- server.py web 恢复本地新版
 ```
+
+---
+
+### 9.7 2026-11-08 大富翁部署（MonopolyRoom + monopoly 前端）
+
+合并 commit `e02ca09`（merge feat/monopoly）。**纯代码部署，Caddy 零改动**：
+`server.py` 新增 `MonopolyRoom`（第三款游戏）与 `/api/roll`、`/api/buy`、`/api/jail`、`/api/build`、`/api/mortgage`、`/api/endturn`，
+state 新增 `board` / `owners` / `cash` / `pos` / `phase` / `dice` / `pending` / `log` 等；
+`web/` 新增大富翁模块（24 格棋盘、买地/盖房/抵押/监狱/观战/终局）并改为三卡首页。
+
+**部署清单**
+
+| 项目 | 值 |
+| --- | --- |
+| 部署时间 | 2026-11-08 07:31 CST |
+| 代码基线 | `e02ca09` |
+| server.py sha256 | `987eedf6…b338`（61873 B） |
+| web/ sha256 | app.js `4b0219fd…2450`、favicon.svg `6a99a1b4…4bd7`、index.html `1f88ac07…b55c`、llk.css `57a6a8a5…053a`、llk.js `56dbb8e6…4fa4`、monopoly.css `54d20930…cbc6`、monopoly.js `78379ec5…a3a9`、MUSIC-CREDITS.md `e4440502…2c7f`、playlist.json `859f9645…ab7e`、style.css `96a727da…ac2e`（全部与本地一致） |
+| 旧版备份（回滚用） | `/opt/gomoku/backup-e02ca09-20261108-073055.tar.gz`（部署前 @055a014 平台版 server.py + web/，sha256 `6189fa0a…ea08`） |
+| 服务 | `systemctl restart gomoku` → active；MainPID `3058892 → 3250845`；`ActiveEnterTimestamp` 07:31:11；`NRestarts=0` |
+| 监听/健康 | `0.0.0.0:8086`；`/api/health` → `{"ok":true,…}` 200 |
+| **Caddy** | **未改动**：active、enabled、`NRestarts=0`；Caddyfile md5 `1108a6cf428ce959c4014c05ef46928b`（与 §9.5 备份相比仍只有 CSP `media-src` 的 +1/-1）；`redir /gomoku` 计数 1；CSP 响应头未变 |
+
+**验收（2026-11-08 07:31–07:33 CST，ALL_PASS）**
+
+- `/gomoku/` 200，`<title>联机小游戏</title>`，页面含三张游戏卡（五子棋 / 连连看 / 大富翁）
+- `/gomoku/monopoly.js` 200 `text/javascript; charset=utf-8`（64483 B）、`/gomoku/monopoly.css` 200 `text/css; charset=utf-8`（23878 B）
+- 静态 5 件 + `/llk.js` / `/llk.css` + `/playlist.json` 全 200
+- API 线上冒烟（经 Caddy）：
+  - 建房 `{"game":"monopoly"}` → `game=monopoly`；第二人加入 color=2、第三人观战 color=0
+  - 初始 state：`board` / `owners` 各 **24** 格、`cash {black:1500,white:1500}`、`pos {0,0}`、`phase=roll`、`log` 非空
+  - 白方先掷 400 `not_your_turn`；观战者掷骰 400 `not_player`；黑方掷骰 200 → `dice=[1,5]`、`pos.black=6`（点数和 % 24）
+  - 掷到 `phase=buy`（地块 5「外滩」）→ `/api/buy {"action":"buy"}` **200** → `owners[5]=1`、现金 1500→1420
+  - `build tile=999` 400 `invalid_move`；`mortgage tile=1 action=x` 400 `invalid_move`；`jail pay`（不在监狱）400 `invalid_phase`
+  - `endturn` 200 → `turn=2`、`dice=None`；白方掷骰 200
+  - 跨游戏：`move` / `undo` 到大富翁房 400 `wrong_game`、`roll` 到五子棋房 400 `wrong_game`、对局中 `restart` 400 `game_not_over`、非法 game 400 `invalid_game`
+- **Playwright + Edge 线上 E2E：`python tests/test_e2e.py --base https://wkeeli.cn/gomoku/` → 52 项全 PASS**
+  （三卡首页、大富翁建房/加入/24 格棋盘/掷骰/日志/买地、移动端三卡、无控制台错误；本次音乐「外链音频实际播放（currentTime > 0）」也 PASS，无 WARN）
+- SSE 首帧 **0.000 s**、心跳 **15.002 s**；无效房 SSE 404、chunked POST 400 均正常
+- 主站回归（不跟随重定向）：`/` 200、`/arch/` 401、`/schedul/` 302、`/pdf2ppt/` 200、`/lst/` 200，与基线一致
+- Caddy 日志无 gomoku 相关 error
+
+**回滚（纯代码，Caddy 不动）**
+
+```bash
+# dev：用部署前整包备份覆盖并重启
+ssh dev "cd /opt/gomoku && tar xzf backup-e02ca09-20261108-073055.tar.gz && systemctl restart gomoku && systemctl is-active gomoku && curl -sS http://127.0.0.1:8086/api/health"
+
+# 可选：从 git 取上一版（本机，上一版 = 平台版 @055a014）
+git checkout 055a014 -- server.py web
+scp .\server.py dev:/opt/gomoku/server.py
+scp -r .\web dev:/opt/gomoku/
+ssh dev "systemctl restart gomoku"
+# 之后 git checkout e02ca09 -- server.py web 恢复本地新版
+```
