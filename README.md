@@ -1,32 +1,34 @@
-# 五子棋 · Gomoku Online
+# 联机小游戏 · Online Games
 
-极简黑白风格的联网五子棋，浏览器打开即可与朋友对战。
+一个极简风格的**双人联机小游戏平台**，浏览器打开即可与朋友对战。目前包含两款游戏：
+
+- **五子棋**：15×15 棋盘，黑先，五连获胜；支持**悔棋**（请求对方同意，每人每局 3 次）与**房间内跨局比分**
+- **连连看**：双人各自一块 8×8 棋盘竞速，先清空 32 对者胜；棋盘保证有解，支持提示与重排
 
 - 在线地址：<https://wkeeli.cn/gomoku/>
-- 规则：15 × 15 棋盘，黑先，横/竖/斜任意方向连成 5 子获胜，棋盘下满为平局
-- 功能：创建 / 加入房间（6 位房号）、分享链接、观战、再来一局、断线重连、明暗主题切换
+- 通用功能：创建 / 加入房间（6 位房号）、邀请链接、观战、再来一局、断线重连、明暗主题切换
 - 音乐：可选的免费版权背景音乐（外链 [Incompetech](https://incompetech.com) · Kevin MacLeod · CC BY 4.0），默认关闭、点按钮播放；曲目清单见 `web/playlist.json`，署名见 `web/MUSIC-CREDITS.md`
-- 视觉：黑白灰极简 UI + 低饱和彩色氛围背景，棋盘质感、落子动画与胜利高光
+- 视觉：黑白灰极简 UI + 低饱和彩色氛围背景、棋盘质感、落子/消除动画、胜利高光
 
 ## 界面
 
-| 浅色大厅（含音乐播放器） | 深色对局 |
-| --- | --- |
-| ![浅色大厅](docs/screenshots/lobby-music.png) | ![深色对局](docs/screenshots/game-dark.png) |
+| 平台首页 | 五子棋（悔棋 / 比分） | 连连看（双人竞速） |
+| --- | --- | --- |
+| ![平台首页](docs/screenshots/home.png) | ![五子棋](docs/screenshots/gomoku-win.png) | ![连连看](docs/screenshots/llk.png) |
 
-| 移动端 |
-| --- |
-| ![移动端](docs/screenshots/mobile-light.png) |
+| 手机端首页 | 手机端连连看 |
+| --- | --- |
+| ![移动端首页](docs/screenshots/mobile-home.png) | ![移动端连连看](docs/screenshots/mobile-llk.png) |
 
 ## 技术栈
 
 | 层 | 实现 |
 | --- | --- |
-| 前端 | 原生 HTML / CSS / JavaScript，Canvas 绘制棋盘，无构建、无第三方依赖 |
+| 前端 | 原生 HTML / CSS / JavaScript，Canvas 绘制五子棋棋盘，无构建、无第三方依赖 |
 | 后端 | Python 3 标准库 `http.server`，SSE（Server-Sent Events）实时推送，内存房间状态，零第三方依赖 |
 | 部署 | systemd 托管 Python 服务，Caddy 子路径反向代理 |
 
-服务端是唯一的规则裁判：房间、落子合法性、胜负判定全部在服务端完成，客户端只负责渲染。
+服务端是唯一的裁判：房间、落子合法性、连连看路径判定、胜负与比分全部在服务端完成，客户端只负责渲染。
 
 ## 本地运行
 
@@ -35,7 +37,7 @@ python server.py                 # 默认 0.0.0.0:8086
 python server.py --port 9000     # 指定端口
 ```
 
-打开 <http://127.0.0.1:8086/> 即可。两个浏览器窗口分别创建 / 加入同一房间即可对战。
+打开 <http://127.0.0.1:8086/>，选择游戏创建房间；两个浏览器窗口分别创建 / 加入同一房间即可对战。
 
 ## 测试
 
@@ -44,29 +46,36 @@ python tests/test_api.py --port 8086   # 需先启动服务
 python tests/test_e2e.py --port 8086   # 浏览器 E2E（Playwright + Edge）
 ```
 
-- API 冒烟：41 项断言（建房、加入、观战、轮次校验、五连判胜、终局、重开、断线重连、播放列表等）
-- 浏览器 E2E：36 项断言（双人对战全流程、观战、刷新保座、明暗主题、移动端、音乐默认关闭/按需加载/真实播放/切歌/音量/署名）
+- API 冒烟：**86 项断言**（两款游戏建房/加入/观战、五子棋轮次与五连、悔棋请求/同意/拒绝/次数、跨局比分、
+  连连看提示/配对/胜负/重开、错误码与旧客户端兼容等）
+- 浏览器 E2E：**42 项断言**（平台首页、双人实时对战、悔棋交互、比分、刷新保座、明暗主题、音乐、
+  连连看双棋盘/提示/进度、移动端、控制台无报错）
 
 ## 目录结构
 
 ```
-server.py          后端服务（HTTP API + SSE + 静态文件）
-web/               前端页面（index.html / style.css / app.js / favicon.svg / playlist.json）
+server.py             后端服务（HTTP API + SSE + 静态文件，多游戏房间）
+web/                  前端页面（index.html / style.css / app.js / llk.js / llk.css / ...）
+web/playlist.json     背景音乐清单（外链）
 web/MUSIC-CREDITS.md  背景音乐署名与许可证说明
-tests/test_api.py  API 冒烟测试
-tests/test_e2e.py  浏览器端到端测试
-deploy/            部署配置（systemd unit、Caddy 路由片段、部署说明）
+tests/test_api.py     API 冒烟测试
+tests/test_e2e.py     浏览器端到端测试
+deploy/               部署配置（systemd unit、Caddy 路由片段、部署说明）
 ```
 
 ## HTTP / SSE 接口
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | `/api/room` | 创建房间，返回房号、玩家 token（执黑） |
-| POST | `/api/join` | 加入房间，返回颜色（1 黑 / 2 白 / 0 观战）；带 token 可重连 |
-| POST | `/api/move` | 落子 `{roomId, token, x, y}` |
-| POST | `/api/restart` | 切换「再来一局」就绪状态，双方就绪后重开 |
-| GET | `/api/stream?room=&token=` | SSE 状态流，事件名 `state` |
+| POST | `/api/room` | 创建房间 `{game}`：`gomoku`（默认）或 `lianliankan`，返回房号与 token（执黑） |
+| POST | `/api/join` | 加入房间 `{roomId, token?}`，返回颜色（1 黑 / 2 白 / 0 观战）与 `game` |
+| POST | `/api/move` | 五子棋落子 `{roomId, token, x, y}` |
+| POST | `/api/undo` | 五子棋悔棋 `{roomId, token, action}`：`request` / `accept` / `reject` / `cancel` |
+| POST | `/api/match` | 连连看配对 `{roomId, token, x1, y1, x2, y2}` |
+| POST | `/api/hint` | 连连看提示，返回一对可消坐标（无解时自动重排） |
+| POST | `/api/shuffle` | 连连看重排剩余图案 |
+| POST | `/api/restart` | 切换「再来一局」就绪状态，双方就绪后重开（五子棋比分保留） |
+| GET | `/api/stream?room=&token=` | SSE 状态流，事件名 `state`，含 `game` 及对应棋局字段 |
 
 部署在子路径（如 `/gomoku/`）时，前端一律使用相对路径，后端无需感知前缀。
 
@@ -74,14 +83,16 @@ deploy/            部署配置（systemd unit、Caddy 路由片段、部署说�
 
 见 [deploy/README.md](deploy/README.md)。
 
-## 已知限制（最小实现）
+## 已知限制
 
 - 公开访问，无账号体系与限流；若被刷房间，可在应用层加房间/连接上限。
 - 房间状态保存在内存中，服务重启即丢局；房间 2 小时无活动自动回收。
 - 断线检测在约 1 秒内发现，再经 3 秒去抖后通知对手（约 4 秒）；SSE 另每 15 秒发一次心跳保活。
 - SSE 的玩家 token 通过查询参数传递，会进入反向代理/服务访问日志（公开小游戏，风险可接受）。
-- 背景音乐为外部曲库直链（incompetech.com，CC BY 4.0）：源站不可达时自动降级为无音乐；曲目不缓存（源站 `no-store`），首次播放可能缓冲数秒。
-- 采用自由规则：5 子及以上连珠即胜，无禁手。
+- 背景音乐为外部曲库直链（incompetech.com，CC BY 4.0）：源站不可达或较慢时自动降级为无声/缓冲；曲目不缓存（源站 `no-store`）。
+- 五子棋悔棋需对方同意，每人每局 3 次，终局后不可悔棋；比分为房间内累计、离开房间即清空。
+- 连连看棋盘在生成时保证有解；玩家自行消出死局时可点「重排」或「提示」自动重排剩余图案。
+- 五子棋采用自由规则：5 子及以上连珠即胜，无禁手。
 
 ## License
 
