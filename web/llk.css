@@ -1,0 +1,683 @@
+/* ==========================================================================
+   连连看（Lianliankan）前端模块样式 —— web/llk.css
+   --------------------------------------------------------------------------
+   · 依赖 web/style.css 的 CSS 变量（--text / --text-muted / --surface? /
+     --glass / --glass-strong / --border / --border-strong / --panel-highlight /
+     --shadow-lg / --focus-ring / --focus-ring-soft / --board-frame / --aurora-*）。
+     所有变量都带兜底值，单独加载也能正常显示（浅色）。
+   · 不引入任何外域资源；颜色完全来自变量，自动适配明暗主题。
+   · 所有规则作用域限定在 .llk / #llk-root，避免影响五子棋等其他模块。
+   ========================================================================== */
+
+#llk-root {
+  width: 100%;
+}
+
+#llk-root[hidden] {
+  display: none !important;
+}
+
+#llk-root:empty {
+  display: none;
+}
+
+/* ============================ 设计变量 ============================ */
+
+.llk,
+.llk *,
+.llk *::before,
+.llk *::after {
+  box-sizing: border-box;
+}
+
+.llk {
+  --llk-fg: var(--text, #14161b);
+  --llk-muted: var(--text-muted, #5d6470);
+  --llk-border: var(--border, rgba(20, 26, 40, 0.12));
+  --llk-border-strong: var(--border-strong, rgba(20, 26, 40, 0.34));
+  --llk-glass: var(--glass, rgba(255, 255, 255, 0.58));
+  --llk-glass-strong: var(--glass-strong, rgba(255, 255, 255, 0.84));
+  --llk-glass-border: var(--glass-border, rgba(255, 255, 255, 0.72));
+  --llk-highlight: var(--panel-highlight, rgba(255, 255, 255, 0.7));
+  --llk-shadow: var(--shadow-lg, 0 32px 64px -32px rgba(20, 30, 55, 0.45));
+  --llk-focus: var(--focus-ring, rgba(20, 22, 27, 0.6));
+  --llk-focus-soft: var(--focus-ring-soft, rgba(20, 22, 27, 0.16));
+  --llk-frame: var(--board-frame, rgba(20, 26, 40, 0.16));
+
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  color: var(--llk-fg);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+/* ============================ 顶部信息卡 ============================ */
+
+.llk-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px clamp(14px, 2.4vw, 20px);
+  border: 1px solid var(--llk-glass-border);
+  border-radius: 20px;
+  background: var(--llk-glass);
+  box-shadow: var(--llk-shadow);
+  backdrop-filter: blur(20px) saturate(125%);
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+}
+
+.llk.is-over .llk-head {
+  box-shadow: var(--llk-shadow), inset 0 0 0 1px var(--llk-focus-soft);
+}
+
+.llk-topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.llk-eyebrow {
+  order: 1;
+  margin: 0;
+  color: var(--llk-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.llk-status {
+  order: 2;
+  margin: 0;
+  margin-left: auto;
+  min-height: 1.5em;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.llk-status.is-muted {
+  color: var(--llk-muted);
+  font-weight: 500;
+}
+
+.llk-status.is-over {
+  font-weight: 700;
+}
+
+.llk-status.is-win {
+  letter-spacing: 0.06em;
+}
+
+/* 比分与对手进度 */
+
+.llk-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.llk-score {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.llk-score-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  color: var(--llk-muted);
+  white-space: nowrap;
+  transition: color 0.16s ease;
+}
+
+.llk-score-item.is-leading {
+  color: var(--llk-fg);
+}
+
+.llk-score-label {
+  font-size: 13px;
+}
+
+.llk-score b {
+  color: var(--llk-fg);
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+}
+
+.llk-score-item.is-leading b {
+  text-shadow: 0 1px 0 var(--llk-highlight);
+}
+
+.llk-total {
+  color: var(--llk-muted);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+}
+
+.llk-score-sep {
+  color: var(--llk-muted);
+  font-size: 13px;
+}
+
+.llk-opp-progress {
+  display: flex;
+  flex: 1 1 170px;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.llk-bar {
+  position: relative;
+  flex: 1 1 auto;
+  height: 8px;
+  min-width: 60px;
+  border-radius: 999px;
+  background: var(--llk-border);
+  overflow: hidden;
+}
+
+.llk-bar-fill {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--llk-fg);
+  transform-origin: left center;
+  transition: width 0.35s cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+.llk-bar-fill.is-bump {
+  animation: llk-bar-bump 0.52s ease;
+}
+
+.llk-bar-caption {
+  flex: none;
+  color: var(--llk-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 按钮与提示语 */
+
+.llk-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.llk-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  min-height: 42px;
+  padding: 9px 18px;
+  border: 1px solid var(--llk-border-strong);
+  border-radius: 12px;
+  background: var(--llk-glass-strong);
+  color: var(--llk-fg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.16s ease, border-color 0.16s ease,
+    background-color 0.16s ease, opacity 0.16s ease;
+}
+
+.llk-btn:hover:not(:disabled) {
+  border-color: var(--llk-fg);
+  transform: translateY(-1px);
+}
+
+.llk-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+.llk-btn:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.llk-btn:focus-visible,
+.llk-tile:focus-visible {
+  outline: 2px solid var(--llk-focus);
+  outline-offset: 2px;
+}
+
+.llk-tip {
+  flex: 1 1 180px;
+  min-width: 0;
+  color: var(--llk-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* ============================ 棋盘布局 ============================ */
+
+.llk-boards {
+  width: 100%;
+}
+
+.llk-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+/* 玩家模式：只显示自己的棋盘，按视口高度收缩 */
+.llk[data-mode="play"] .llk-boards {
+  display: block;
+}
+
+.llk[data-mode="play"] .llk-pane-self {
+  width: min(100%, 480px, max(230px, calc(100dvh - 330px)));
+  margin: 0 auto;
+}
+
+.llk[data-mode="play"] .llk-pane-opp {
+  display: none;
+}
+
+/* 观战模式：左右双棋盘 */
+.llk[data-mode="spectate"] {
+  max-width: 720px;
+}
+
+.llk[data-mode="spectate"] .llk-boards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(10px, 1.6vw, 18px);
+  max-width: min(100%, 720px, max(360px, calc(100dvh - 340px) * 2));
+  margin: 0 auto;
+  align-items: start;
+}
+
+/* 观战双棋盘需要把格子做够大（≥32px），压缩棋盘内边距与间隙 */
+.llk[data-mode="spectate"] .llk-board {
+  gap: clamp(3px, 0.55vw, 5px);
+  padding: clamp(4px, 0.9vw, 7px);
+}
+
+.llk[data-mode="spectate"] .llk-pane {
+  width: 100%;
+}
+
+.llk[data-mode="spectate"] .llk-pane-head {
+  display: flex;
+}
+
+.llk[data-mode="spectate"] .llk-tools,
+.llk[data-mode="spectate"] .llk-opp-progress {
+  display: none;
+}
+
+.llk[data-mode="spectate"] .llk-meta {
+  justify-content: center;
+}
+
+.llk-pane-head {
+  display: none;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 4px;
+  color: var(--llk-muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.llk-pane-label {
+  color: var(--llk-fg);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+.llk-pane-state {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.llk-pane-state::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--llk-muted);
+  vertical-align: 1px;
+}
+
+.llk-pane-state.is-online {
+  color: var(--llk-fg);
+}
+
+.llk-pane-state.is-online::before {
+  background: var(--llk-fg);
+}
+
+/* ============================ 棋盘卡面 ============================ */
+
+.llk-board {
+  display: grid;
+  grid-template-columns: repeat(var(--llk-size, 8), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--llk-size, 8), minmax(0, 1fr));
+  gap: clamp(3px, 0.7vw, 6px);
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  padding: clamp(5px, 1.1vw, 9px);
+  border: 1px solid var(--llk-frame);
+  border-radius: 18px;
+  background: var(--llk-glass);
+  box-shadow: var(--llk-shadow), inset 0 1px 0 var(--llk-highlight);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  container-type: inline-size;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.llk-board.is-locked {
+  /* 只读棋盘的视觉弱化，格子本身仍保持可读 */
+  background: var(--llk-glass);
+}
+
+/* ============================ 格子 ============================ */
+
+.llk-tile {
+  appearance: none;
+  -webkit-appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--llk-border);
+  border-radius: clamp(7px, 2vw, 12px);
+  background: var(--llk-glass-strong);
+  box-shadow: inset 0 1px 0 var(--llk-highlight);
+  color: var(--llk-fg);
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Segoe UI Symbol", sans-serif;
+  font-size: clamp(15px, 4.2vw, 28px);
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 0.14s ease, border-color 0.14s ease,
+    background-color 0.14s ease, opacity 0.14s ease;
+}
+
+@container (min-width: 1px) {
+  .llk-tile {
+    font-size: 9.4cqw;
+    border-radius: 1.9cqw;
+  }
+}
+
+.llk-tile:hover:not(:disabled) {
+  border-color: var(--llk-border-strong);
+  transform: translateY(-1px);
+}
+
+.llk-tile:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+
+.llk-tile:disabled {
+  cursor: default;
+}
+
+.llk-tile.is-empty {
+  border-style: dashed;
+  border-color: var(--llk-border);
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.45;
+  cursor: default;
+}
+
+.llk-tile.is-empty:hover {
+  border-color: var(--llk-border);
+  transform: none;
+}
+
+.llk-tile.is-locked {
+  cursor: default;
+}
+
+.llk-tile.is-locked:hover:not(:disabled) {
+  border-color: var(--llk-border);
+  transform: none;
+}
+
+.llk-tile.is-selected {
+  border-color: var(--llk-fg);
+  background: var(--llk-glass-strong);
+  box-shadow: 0 0 0 2px var(--llk-focus-soft), inset 0 1px 0 var(--llk-highlight);
+  transform: translateY(-1px) scale(1.04);
+  z-index: 1;
+}
+
+.llk-tile.is-pending {
+  opacity: 0.55;
+  transform: scale(0.94);
+}
+
+.llk-tile.is-hint {
+  border-color: var(--llk-fg);
+  animation: llk-hint-pulse 1s ease-in-out infinite;
+}
+
+.llk-tile.is-clearing {
+  animation: llk-clear 0.3s cubic-bezier(0.4, 0, 0.7, 1) forwards;
+  pointer-events: none;
+}
+
+.llk-tile.is-flash {
+  animation: llk-flash 0.72s ease-out;
+}
+
+/* ============================ 动画 ============================ */
+
+@keyframes llk-clear {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.35) rotate(6deg);
+  }
+}
+
+@keyframes llk-hint-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--llk-focus-soft), inset 0 1px 0 var(--llk-highlight);
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--llk-focus), inset 0 1px 0 var(--llk-highlight);
+  }
+}
+
+@keyframes llk-flash {
+  0% {
+    box-shadow: 0 0 0 0 var(--llk-focus);
+    border-color: var(--llk-fg);
+  }
+  40% {
+    box-shadow: 0 0 0 4px var(--llk-focus-soft);
+    border-color: var(--llk-fg);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+    border-color: var(--llk-border);
+  }
+}
+
+@keyframes llk-bar-bump {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  45% {
+    filter: brightness(1.8);
+  }
+}
+
+/* ============================ 响应式 ============================ */
+
+/* 手机：观战双棋盘改为上下排列，保证格子 ≥ 32px 且不横向滚动 */
+@media (max-width: 640px) {
+  .llk[data-mode="spectate"] .llk-boards {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: min(100%, 480px);
+    gap: 14px;
+  }
+
+  .llk[data-mode="spectate"] .llk-pane-head {
+    justify-content: space-between;
+  }
+
+  .llk {
+    gap: 12px;
+  }
+
+  .llk-head {
+    gap: 9px;
+    padding: 12px 13px;
+  }
+
+  .llk-status {
+    font-size: 14.5px;
+  }
+
+  .llk-score b {
+    font-size: 19px;
+  }
+
+  .llk-opp-progress {
+    flex-basis: 100%;
+  }
+
+  .llk-eyebrow {
+    letter-spacing: 0.2em;
+  }
+
+  .llk[data-mode="play"] .llk-pane-self {
+    width: min(100%, 480px, max(230px, calc(100dvh - 330px)));
+  }
+}
+
+@media (max-width: 400px) {
+  .llk-topline {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .llk-status {
+    margin-left: 0;
+    font-size: 14px;
+  }
+
+  .llk-tip {
+    display: none;
+  }
+
+  .llk-btn {
+    flex: 1 1 auto;
+  }
+}
+
+/* 矮屏：压缩头部，优先保证棋盘可玩 */
+@media (max-height: 700px) {
+  .llk {
+    gap: 10px;
+  }
+
+  .llk-head {
+    gap: 6px;
+    padding: 9px 12px;
+  }
+
+  .llk-tip {
+    display: none;
+  }
+
+  .llk-status {
+    font-size: 14px;
+  }
+
+  .llk-score b {
+    font-size: 18px;
+  }
+
+  .llk[data-mode="play"] .llk-pane-self {
+    width: min(100%, 480px, max(210px, calc(100dvh - 250px)));
+  }
+}
+
+/* 不支持 backdrop-filter 时用更实的底色 */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  .llk-head,
+  .llk-board,
+  .llk-tile,
+  .llk-btn {
+    background: var(--llk-glass-strong);
+  }
+}
+
+/* ============================ 减少动态效果 ============================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .llk *,
+  .llk *::before,
+  .llk *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .llk-tile.is-hint {
+    box-shadow: 0 0 0 2px var(--llk-focus);
+  }
+
+  .llk-tile.is-clearing {
+    opacity: 0;
+    transform: none;
+  }
+
+  .llk-tile.is-flash {
+    box-shadow: 0 0 0 2px var(--llk-focus);
+  }
+
+  .llk-bar-fill.is-bump {
+    filter: none;
+  }
+}

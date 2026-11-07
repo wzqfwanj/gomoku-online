@@ -12,6 +12,7 @@
     join: './api/join',
     move: './api/move',
     restart: './api/restart',
+    undo: './api/undo',
     stream: './api/stream'
   };
 
@@ -32,9 +33,11 @@
   }
 
   var ui = {
-    lobby: $('view-lobby'),
+    home: $('view-home'),
     game: $('view-game'),
-    createBtn: $('create-btn'),
+    llk: $('view-llk'),
+    createGomoku: $('create-gomoku'),
+    createLlk: $('create-llk'),
     joinForm: $('join-form'),
     joinCode: $('join-code'),
     joinSubmit: $('join-submit'),
@@ -43,6 +46,19 @@
     copyBtn: $('copy-btn'),
     status: $('status'),
     presence: $('presence'),
+    score: $('score'),
+    undoBtn: $('undo-btn'),
+    undoBanner: $('undo-banner'),
+    undoText: $('undo-text'),
+    undoAccept: $('undo-accept'),
+    undoReject: $('undo-reject'),
+    undoCancel: $('undo-cancel'),
+    llkRoomCode: $('llk-room-code'),
+    llkCopyBtn: $('llk-copy-btn'),
+    llkPresence: $('llk-presence'),
+    llkRoot: $('llk-root'),
+    llkRestartBtn: $('llk-restart-btn'),
+    llkLeaveBtn: $('llk-leave-btn'),
     board: $('board'),
     boardFx: $('board-fx'),
     restartBtn: $('restart-btn'),
@@ -64,6 +80,7 @@
     roomId: '',
     token: '',
     color: 0, // 1 黑 2 白 0 观战/未入座
+    game: 'gomoku', // gomoku | lianliankan
     state: null,
     es: null,
     joined: false,
@@ -72,6 +89,8 @@
     creating: false,
     restartPending: false,
     movePending: false,
+    undoBusy: false,
+    llkInited: false,
     seen: { black: false, white: false },
     spectatorHintShown: false,
     toastTimer: null,
@@ -293,13 +312,18 @@
     }
   }
 
+  function normalizeGame(value) {
+    return value === 'lianliankan' ? 'lianliankan' : 'gomoku';
+  }
+
   function resolveJoin(res, roomId, fallbackToken) {
     var color = res && typeof res.color === 'number' ? res.color : 0;
     if (color !== 0 && color !== 1 && color !== 2) color = 0;
     var token = res && res.token ? String(res.token) : (fallbackToken || '');
-    if (color === 1 || color === 2) return { color: color, token: token };
+    var game = normalizeGame(res && res.game);
+    if (color === 1 || color === 2) return { color: color, token: token, game: game };
     storageRemove(tokenKey(roomId));
-    return { color: 0, token: '' };
+    return { color: 0, token: '', game: game };
   }
 
   function handleJoinError(err) {
@@ -308,33 +332,44 @@
     else toast('加入房间失败，请稍后重试', 'error');
   }
 
-  async function createRoom() {
+  function setHomeControlsDisabled(disabled) {
+    if (ui.createGomoku) ui.createGomoku.disabled = disabled;
+    if (ui.createLlk) ui.createLlk.disabled = disabled;
+    if (ui.joinCode) ui.joinCode.disabled = disabled;
+    if (ui.joinSubmit) ui.joinSubmit.disabled = disabled;
+  }
+
+  async function createRoom(gameType) {
+    var game = normalizeGame(gameType);
     if (app.busy || app.creating) return;
     app.creating = true;
     app.busy = true;
-    ui.createBtn.disabled = true;
-    ui.createBtn.textContent = '创建中…';
+    setHomeControlsDisabled(true);
+    var button = game === 'lianliankan' ? ui.createLlk : ui.createGomoku;
+    var label = button ? button.textContent : '创建房间';
+    if (button) button.textContent = '创建中…';
     try {
-      var res = await apiPost(API.room, {});
+      var res = await apiPost(API.room, { game: game });
       var roomId = normalizeRoomId(res && res.roomId);
       if (!roomId) throw new Error('bad_response');
       var token = res && res.token ? String(res.token) : '';
       var color = res && res.color === 2 ? 2 : 1;
-      enterGame(roomId, color, token);
+      var resGame = res && res.game ? normalizeGame(res.game) : game;
+      enterRoom(roomId, color, token, resGame);
     } catch (err) {
       toast('创建房间失败，请稍后重试', 'error');
     } finally {
       app.creating = false;
       app.busy = false;
-      ui.createBtn.disabled = false;
-      ui.createBtn.textContent = '创建房间';
+      setHomeControlsDisabled(false);
+      if (button) button.textContent = label;
     }
   }
 
   async function joinByCode(code) {
     if (app.busy) return;
     app.busy = true;
-    setLobbyControlsDisabled(true);
+    setHomeControlsDisabled(true);
     try {
       var stored = storageGet(tokenKey(code)) || '';
       var payload = { roomId: code };
@@ -342,19 +377,19 @@
       var res = await apiPost(API.join, payload);
       var roomId = normalizeRoomId(res && res.roomId) || code;
       var seat = resolveJoin(res, roomId, stored);
-      enterGame(roomId, seat.color, seat.token);
+      enterRoom(roomId, seat.color, seat.token, seat.game);
       if (seat.color === 0) toast('房间已满，进入观战');
     } catch (err) {
       handleJoinError(err);
     } finally {
       app.busy = false;
-      setLobbyControlsDisabled(false);
+      setHomeControlsDisabled(false);
     }
   }
 
   async function autoJoinFromUrl(code) {
     app.busy = true;
-    setLobbyControlsDisabled(true);
+    setHomeControlsDisabled(true);
     ui.joinCode.value = code;
     try {
       var stored = storageGet(tokenKey(code)) || '';
@@ -363,15 +398,15 @@
       var res = await apiPost(API.join, payload);
       var roomId = normalizeRoomId(res && res.roomId) || code;
       var seat = resolveJoin(res, roomId, stored);
-      enterGame(roomId, seat.color, seat.token);
+      enterRoom(roomId, seat.color, seat.token, seat.game);
       if (seat.color === 0) toast('房间已满或座位已失效，进入观战');
     } catch (err) {
       handleJoinError(err);
       clearRoomInUrl();
-      showLobby();
+      showHome();
     } finally {
       app.busy = false;
-      setLobbyControlsDisabled(false);
+      setHomeControlsDisabled(false);
     }
   }
 
@@ -467,7 +502,7 @@
     } catch (err) {
       if (err && err.code === 'room_not_found') {
         toast('房间已失效');
-        leaveToLobby();
+        leaveToHome();
       }
     }
   }
@@ -483,11 +518,34 @@
     }
     app.restartPending = false;
 
+    // 以服务器 state.game 为准切换视图，旧链接 / 连接竞态都能纠正
+    var game = normalizeGame(state.game);
+    if (game !== app.game) setGameView(game);
+
+    if (game === 'lianliankan') {
+      updatePresence();
+      updateLLK();
+      updateLLKRestartButton();
+      return;
+    }
+
     var lm = state.lastMove;
     var key = lm && typeof lm.x === 'number' && typeof lm.y === 'number' ? lm.x + ':' + lm.y + ':' + (state.moves | 0) : '';
     if (key !== app.fx.lastMoveKey) {
       app.fx.lastMoveKey = key;
       app.fx.moveStart = key && !prefersReducedMotion() ? window.performance.now() : 0;
+    }
+
+    // 悔棋成功：请求消失且手数减少
+    if (
+      previous &&
+      previous.undoRequest &&
+      !state.undoRequest &&
+      typeof previous.moves === 'number' &&
+      typeof state.moves === 'number' &&
+      state.moves < previous.moves
+    ) {
+      toast('已悔棋');
     }
 
     if (previous && previous.winner !== 0 && !state.winner && (state.moves | 0) === 0) {
@@ -496,6 +554,8 @@
 
     updateStatus();
     updatePresence();
+    updateScore();
+    updateUndoUI();
     updateRestartButton();
     updateBoardCursor();
     redrawBoard();
@@ -503,10 +563,21 @@
 
   /* ============================ 视图 ============================ */
 
-  function setLobbyControlsDisabled(disabled) {
-    ui.createBtn.disabled = disabled;
-    ui.joinCode.disabled = disabled;
-    ui.joinSubmit.disabled = disabled;
+  function setGameView(game) {
+    game = normalizeGame(game);
+    app.game = game;
+    var isGomoku = game === 'gomoku';
+    ui.home.hidden = true;
+    ui.game.hidden = !isGomoku;
+    ui.llk.hidden = isGomoku;
+    if (isGomoku) {
+      window.requestAnimationFrame(function () {
+        redrawBoard();
+      });
+    } else {
+      resetFxState();
+      ensureLLKInit();
+    }
   }
 
   function resetFxState() {
@@ -519,64 +590,99 @@
     }
   }
 
-  function showLobby() {
+  function showHome() {
     closeStream();
     resetFxState();
+    if (window.LLK && app.llkInited && typeof window.LLK.reset === 'function') {
+      try {
+        window.LLK.reset();
+      } catch (err) {
+        /* 连连看模块异常不影响主页面 */
+      }
+    }
     app.roomId = '';
     app.token = '';
     app.color = 0;
+    app.game = 'gomoku';
     app.state = null;
     app.joined = false;
     app.needsRejoin = false;
     app.restartPending = false;
     app.movePending = false;
+    app.undoBusy = false;
     app.seen = { black: false, white: false };
     app.spectatorHintShown = false;
     app.palette = null;
 
+    ui.home.hidden = false;
     ui.game.hidden = true;
-    ui.lobby.hidden = false;
+    ui.llk.hidden = true;
     ui.joinCode.value = '';
     ui.roomCode.textContent = '';
+    if (ui.llkRoomCode) ui.llkRoomCode.textContent = '';
     ui.status.textContent = '正在连接…';
     ui.status.className = 'status';
     ui.presence.textContent = '';
+    if (ui.llkPresence) ui.llkPresence.textContent = '';
+    if (ui.score) {
+      ui.score.hidden = true;
+      ui.score.textContent = '';
+    }
+    if (ui.llkRoot) ui.llkRoot.textContent = '';
     ui.restartBtn.hidden = true;
     ui.restartBtn.disabled = false;
-    setLobbyControlsDisabled(false);
+    if (ui.llkRestartBtn) {
+      ui.llkRestartBtn.hidden = true;
+      ui.llkRestartBtn.disabled = false;
+    }
+    if (ui.undoBtn) {
+      ui.undoBtn.hidden = true;
+      ui.undoBtn.disabled = false;
+    }
+    if (ui.undoBanner) ui.undoBanner.hidden = true;
+    setHomeControlsDisabled(false);
   }
 
-  function enterGame(roomId, color, token) {
+  function enterRoom(roomId, color, token, game) {
     closeStream();
     resetFxState();
     app.roomId = roomId;
     app.token = token || '';
     app.color = color === 2 ? 2 : color === 1 ? 1 : 0;
+    app.game = normalizeGame(game);
     app.state = null;
     app.joined = true;
     app.needsRejoin = false;
     app.restartPending = false;
     app.movePending = false;
+    app.undoBusy = false;
     app.seen = { black: false, white: false };
     app.spectatorHintShown = false;
 
     if ((app.color === 1 || app.color === 2) && app.token) storageSet(tokenKey(roomId), app.token);
 
-    ui.lobby.hidden = true;
-    ui.game.hidden = false;
+    ui.home.hidden = true;
+    var isGomoku = app.game === 'gomoku';
+    ui.game.hidden = !isGomoku;
+    ui.llk.hidden = isGomoku;
     ui.roomCode.textContent = roomId;
+    if (ui.llkRoomCode) ui.llkRoomCode.textContent = roomId;
     setRoomInUrl(roomId);
     updateAll();
-    window.requestAnimationFrame(function () {
-      redrawBoard();
-    });
+    if (isGomoku) {
+      window.requestAnimationFrame(function () {
+        redrawBoard();
+      });
+    } else {
+      ensureLLKInit();
+    }
     openStream();
   }
 
-  function leaveToLobby() {
+  function leaveToHome() {
     closeStream();
     clearRoomInUrl();
-    showLobby();
+    showHome();
   }
 
   /* ============================ 状态文案 ============================ */
@@ -656,6 +762,7 @@
     var state = app.state;
     if (!state || !state.players) {
       ui.presence.textContent = '';
+      if (ui.llkPresence) ui.llkPresence.textContent = '';
       return;
     }
     var parts = [];
@@ -672,13 +779,14 @@
       line += '　·　观战 ' + state.spectators + ' 人';
     }
     ui.presence.textContent = line;
+    if (ui.llkPresence) ui.llkPresence.textContent = app.game === 'lianliankan' ? line : '';
   }
 
   function updateRestartButton() {
     var state = app.state;
     var isPlayer = app.color === 1 || app.color === 2;
     var button = ui.restartBtn;
-    if (!isPlayer) {
+    if (app.game !== 'gomoku' || !isPlayer) {
       button.hidden = true;
       return;
     }
@@ -691,10 +799,202 @@
     button.setAttribute('aria-label', button.textContent);
   }
 
+  function updateLLKRestartButton() {
+    var button = ui.llkRestartBtn;
+    if (!button) return;
+    var state = app.state;
+    var isPlayer = app.color === 1 || app.color === 2;
+    if (!state || !isPlayer || app.game !== 'lianliankan') {
+      button.hidden = true;
+      button.disabled = true;
+      return;
+    }
+    button.hidden = false;
+    var over = !!state.winner;
+    var ready = !!(app.color && readyAt(mySeat()));
+    button.textContent = ready ? '取消准备' : '再来一局';
+    button.disabled = !over || app.restartPending;
+    button.title = over ? '双方都点击后开始新一局' : '本局结束后可再来一局';
+    button.setAttribute('aria-label', button.textContent);
+  }
+
+  function updateRestartButtons() {
+    updateRestartButton();
+    updateLLKRestartButton();
+  }
+
+  /* ============================ 比分 / 悔棋 ============================ */
+
+  function updateScore() {
+    if (!ui.score) return;
+    var score = app.state && app.state.score;
+    if (!score || app.game !== 'gomoku') {
+      ui.score.hidden = true;
+      return;
+    }
+    var black = Number(score.black) || 0;
+    var white = Number(score.white) || 0;
+    ui.score.hidden = false;
+    ui.score.textContent = '黑 ' + black + ' : ' + white + ' 白';
+  }
+
+  function undoRemaining() {
+    var state = app.state;
+    var seat = mySeat();
+    if (!state || !seat || !state.undoLeft) return null;
+    var value = Number(state.undoLeft[seat]);
+    return isFinite(value) ? value : null;
+  }
+
+  function canRequestUndo() {
+    var state = app.state;
+    if (!state || app.game !== 'gomoku') return false;
+    if (app.color !== 1 && app.color !== 2) return false;
+    if (state.winner) return false;
+    if (!state.lastMove || state.lastMove.color !== app.color) return false;
+    var left = undoRemaining();
+    if (left !== null && left <= 0) return false;
+    if (state.undoRequest) return false;
+    return !app.undoBusy;
+  }
+
+  function updateUndoButton() {
+    var button = ui.undoBtn;
+    if (!button) return;
+    var state = app.state;
+    var isPlayer = app.color === 1 || app.color === 2;
+    if (!state || !isPlayer || app.game !== 'gomoku') {
+      button.hidden = true;
+      button.disabled = true;
+      return;
+    }
+    button.hidden = false;
+    var left = undoRemaining();
+    button.textContent = left === null ? '悔棋' : '悔棋 (剩 ' + left + ')';
+    button.disabled = !canRequestUndo();
+    button.title = button.disabled ? '当前不能悔棋' : '请求悔棋（需对方同意）';
+    button.setAttribute('aria-label', button.textContent);
+  }
+
+  function updateUndoBanner() {
+    var banner = ui.undoBanner;
+    if (!banner) return;
+    var state = app.state;
+    var isPlayer = app.color === 1 || app.color === 2;
+    var request = state && state.undoRequest;
+    if (!request || !isPlayer || app.game !== 'gomoku') {
+      banner.hidden = true;
+      return;
+    }
+    banner.hidden = false;
+    var isMine = request.color === app.color;
+    if (ui.undoText) ui.undoText.textContent = isMine ? '等待对方回应…' : '对手请求悔棋';
+    if (ui.undoAccept) {
+      ui.undoAccept.hidden = isMine;
+      ui.undoAccept.disabled = app.undoBusy;
+    }
+    if (ui.undoReject) {
+      ui.undoReject.hidden = isMine;
+      ui.undoReject.disabled = app.undoBusy;
+    }
+    if (ui.undoCancel) {
+      ui.undoCancel.hidden = !isMine;
+      ui.undoCancel.disabled = app.undoBusy;
+    }
+  }
+
+  function updateUndoUI() {
+    updateUndoButton();
+    updateUndoBanner();
+  }
+
+  function handleUndoError(err) {
+    var code = err && err.code;
+    if (code === 'not_player') toast('观战者不能悔棋');
+    else if (code === 'game_over') toast('本局已经结束');
+    else if (code === 'undo_pending' || code === 'request_pending') toast('已有悔棋请求');
+    else if (code === 'no_undo_left' || code === 'undo_exhausted') toast('悔棋次数已用完');
+    else if (code === 'not_your_move' || code === 'no_undo' || code === 'nothing_to_undo') toast('当前不能悔棋');
+    else toast('悔棋操作失败，请稍后重试', 'error');
+  }
+
+  async function sendUndoAction(action) {
+    if (app.undoBusy || !app.roomId || !app.token || app.game !== 'gomoku') return;
+    app.undoBusy = true;
+    updateUndoUI();
+    try {
+      await apiPost(API.undo, { roomId: app.roomId, token: app.token, action: action });
+      if (action === 'request') toast('已发送悔棋请求');
+      else if (action === 'reject') toast('已拒绝悔棋');
+      else if (action === 'cancel') toast('已取消悔棋请求');
+    } catch (err) {
+      handleUndoError(err);
+    } finally {
+      app.undoBusy = false;
+      updateUndoUI();
+    }
+  }
+
+  /* ============================ 连连看桥接 ============================ */
+
+  function normalizeApiPath(path) {
+    var text = String(path == null ? '' : path);
+    if (text.indexOf('./') === 0) return text;
+    if (text.charAt(0) === '/') return '.' + text;
+    return './' + text;
+  }
+
+  function createLLKBridge() {
+    return {
+      getRoom: function () {
+        return app.roomId;
+      },
+      getToken: function () {
+        return app.token;
+      },
+      getColor: function () {
+        return app.color;
+      },
+      apiPost: function (path, body) {
+        return apiPost(normalizeApiPath(path), body);
+      },
+      toast: toast
+    };
+  }
+
+  function ensureLLKInit() {
+    if (app.llkInited) return true;
+    if (!window.LLK || typeof window.LLK.init !== 'function') {
+      if (ui.llkRoot) ui.llkRoot.textContent = '连连看模块加载中，请稍候…';
+      return false;
+    }
+    try {
+      window.LLK.init(createLLKBridge());
+      app.llkInited = true;
+      if (ui.llkRoot) ui.llkRoot.textContent = '';
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function updateLLK() {
+    if (!ui.llk || ui.llk.hidden) return;
+    if (!ensureLLKInit()) return;
+    var state = app.state;
+    if (!state) return;
+    try {
+      window.LLK.render(state, app.color);
+    } catch (err) {
+      /* 连连看模块异常不拖垮主页面 */
+    }
+  }
+
   function canPlayNow() {
     var state = app.state;
     return !!(
       state &&
+      app.game === 'gomoku' &&
       (app.color === 1 || app.color === 2) &&
       !state.winner &&
       state.turn === app.color &&
@@ -709,7 +1009,9 @@
   function updateAll() {
     updateStatus();
     updatePresence();
-    updateRestartButton();
+    updateScore();
+    updateUndoUI();
+    updateRestartButtons();
     updateBoardCursor();
     redrawBoard();
   }
@@ -1133,20 +1435,20 @@
     var state = app.state;
     if (!state || !state.winner) return;
     app.restartPending = true;
-    updateRestartButton();
+    updateRestartButtons();
     try {
       await apiPost(API.restart, { roomId: app.roomId, token: app.token });
       toast('已准备再来一局');
     } catch (err) {
       toast('操作失败，请稍后重试', 'error');
       app.restartPending = false;
-      updateRestartButton();
+      updateRestartButtons();
       return;
     }
     setTimeout(function () {
       if (app.restartPending) {
         app.restartPending = false;
-        updateRestartButton();
+        updateRestartButtons();
       }
     }, 4000);
   }
@@ -1627,7 +1929,16 @@
   }
 
   function bindEvents() {
-    ui.createBtn.addEventListener('click', createRoom);
+    if (ui.createGomoku) {
+      ui.createGomoku.addEventListener('click', function () {
+        createRoom('gomoku');
+      });
+    }
+    if (ui.createLlk) {
+      ui.createLlk.addEventListener('click', function () {
+        createRoom('lianliankan');
+      });
+    }
     ui.joinForm.addEventListener('submit', onJoinSubmit);
     ui.joinCode.addEventListener('input', function () {
       var cleaned = ui.joinCode.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
@@ -1635,8 +1946,32 @@
     });
     ui.themeToggle.addEventListener('click', toggleTheme);
     ui.copyBtn.addEventListener('click', copyInvite);
+    if (ui.llkCopyBtn) ui.llkCopyBtn.addEventListener('click', copyInvite);
     ui.restartBtn.addEventListener('click', restartRound);
-    ui.leaveBtn.addEventListener('click', leaveToLobby);
+    if (ui.llkRestartBtn) ui.llkRestartBtn.addEventListener('click', restartRound);
+    ui.leaveBtn.addEventListener('click', leaveToHome);
+    if (ui.llkLeaveBtn) ui.llkLeaveBtn.addEventListener('click', leaveToHome);
+
+    if (ui.undoBtn) {
+      ui.undoBtn.addEventListener('click', function () {
+        sendUndoAction('request');
+      });
+    }
+    if (ui.undoAccept) {
+      ui.undoAccept.addEventListener('click', function () {
+        sendUndoAction('accept');
+      });
+    }
+    if (ui.undoReject) {
+      ui.undoReject.addEventListener('click', function () {
+        sendUndoAction('reject');
+      });
+    }
+    if (ui.undoCancel) {
+      ui.undoCancel.addEventListener('click', function () {
+        sendUndoAction('cancel');
+      });
+    }
 
     ui.board.addEventListener('click', onBoardClick);
     ui.board.addEventListener('pointermove', onBoardPointerMove);
@@ -1651,7 +1986,7 @@
     initTheme();
     bindEvents();
     setupResize();
-    showLobby();
+    showHome();
     loadPlaylist();
 
     var roomFromUrl = getRoomFromUrl();
