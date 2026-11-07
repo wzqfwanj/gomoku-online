@@ -93,6 +93,7 @@ def main():
         check("平台标题", "联机小游戏" in page_a.locator("h1").inner_text(), page_a.locator("h1").inner_text())
         check("五子棋卡片", page_a.locator("#create-gomoku").is_visible())
         check("连连看卡片", page_a.locator("#create-llk").is_visible())
+        check("大富翁卡片", page_a.locator("#create-monopoly").is_visible())
         body_text = page_a.locator("body").inner_text()
         check("已删除旧的规则文案", "15×15 棋盘，黑方先行" not in body_text)
         check("彩色氛围背景存在", page_a.locator(".aurora").count() == 1)
@@ -248,15 +249,51 @@ def main():
         page_a.screenshot(path=os.path.join(shots, "04-llk-light.png"), full_page=True)
         check("连连看双方各有棋盘", page_a.locator("#llk-self-board").count() == 1)
 
-        print("[11] 移动端")
+        print("[11] 大富翁：建房 / 加入 / 掷骰 / 买地")
+        goto(page_a, base)
+        expect(page_a.locator("#create-monopoly")).to_be_visible(timeout=8000)
+        page_a.locator("#create-monopoly").click()
+        expect(page_a.locator("#view-monopoly")).to_be_visible(timeout=12000)
+        mono_room = page_a.locator("#mono-room-code").inner_text().strip()
+        check("大富翁房号 6 位", len(mono_room) == 6, mono_room)
+        expect(page_a.locator("#monopoly-root .mono-tile")).to_have_count(24, timeout=12000)
+        check("大富翁棋盘 24 格", page_a.locator("#monopoly-root .mono-tile").count() == 24)
+
+        goto(page_b, base + "?room=" + mono_room)
+        expect(page_b.locator("#view-monopoly")).to_be_visible(timeout=12000)
+        expect(page_b.locator("#monopoly-root .mono-tile")).to_have_count(24, timeout=12000)
+        expect(page_a.locator("#mono-roll")).to_be_visible(timeout=10000)
+        check("A 可掷骰", page_a.locator("#mono-roll").is_enabled())
+        page_a.locator("#mono-roll").click()
+        page_a.wait_for_timeout(1500)
+        check("A 掷骰产生日志", "掷出" in page_a.locator("#mono-log").inner_text(),
+              page_a.locator("#mono-log").inner_text())
+        if page_a.locator("#mono-buy-panel").is_visible():
+            page_a.locator("#mono-buy").click()
+            page_a.wait_for_timeout(900)
+            check("买地成功（现金变化）", "购买" in page_a.locator("#mono-log").inner_text(),
+                  page_a.locator("#mono-log").inner_text())
+        if page_a.locator("#mono-end-turn").is_visible():
+            page_a.locator("#mono-end-turn").click()
+            page_a.wait_for_timeout(900)
+        expect(page_b.locator("#mono-roll")).to_be_visible(timeout=10000)
+        check("B 轮到自己", page_b.locator("#mono-roll").is_enabled())
+        page_b.locator("#mono-roll").click()
+        page_b.wait_for_timeout(1500)
+        check("B 掷骰产生日志", "掷出" in page_b.locator("#mono-log").inner_text(),
+              page_b.locator("#mono-log").inner_text())
+        page_a.screenshot(path=os.path.join(shots, "06-monopoly.png"), full_page=True)
+
+        print("[12] 移动端")
         goto(page_m, base)
         check("移动端首页可见", page_m.locator("#create-gomoku").is_visible())
+        check("移动端三张游戏卡", page_m.locator("#create-monopoly").is_visible())
         check("移动端无横向滚动", page_m.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
-        page_m.screenshot(path=os.path.join(shots, "05-mobile-home.png"), full_page=True)
+        page_m.screenshot(path=os.path.join(shots, "07-mobile-home.png"), full_page=True)
 
         browser.close()
 
-    print("[12] 控制台错误检查")
+    print("[13] 控制台错误检查")
     real_errors = [e for e in errors if "favicon" not in e.lower()]
     check("无 JS/控制台错误", not real_errors, "; ".join(real_errors[:5]))
 

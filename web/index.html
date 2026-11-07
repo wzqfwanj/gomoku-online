@@ -7,12 +7,14 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#eef1f6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
-<meta name="description" content="联机小游戏平台：五子棋、连连看，创建房间邀请好友实时对战。">
+<meta name="description" content="联机小游戏平台：五子棋、连连看、大富翁，创建房间邀请好友实时对战。">
 <title>联机小游戏</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="llk.css">
+<link rel="stylesheet" href="monopoly.css">
 <script src="llk.js" defer></script>
+<script src="monopoly.js" defer></script>
 <script src="app.js" defer></script>
 </head>
 <body>
@@ -77,6 +79,22 @@
           <h2 class="game-card-name">连连看</h2>
           <p class="game-card-desc">双人各一盘 · 先清空者胜</p>
           <button id="create-llk" class="btn" type="button">创建房间</button>
+        </article>
+
+        <article class="game-card">
+          <span class="game-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48" focusable="false">
+              <path d="M8 12h32v24H8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.55"></path>
+              <path d="M8 20h32M20 20v16M28 20v16" stroke="currentColor" stroke-width="1.5" opacity="0.4"></path>
+              <rect x="10" y="14" width="8" height="4" rx="1" fill="currentColor" opacity="0.75"></rect>
+              <rect x="22" y="28" width="8" height="4" rx="1" fill="currentColor" opacity="0.45"></rect>
+              <circle cx="31" cy="9" r="4" fill="none" stroke="currentColor" stroke-width="1.8"></circle>
+              <circle cx="38" cy="15" r="4" fill="currentColor" opacity="0.35"></circle>
+            </svg>
+          </span>
+          <h2 class="game-card-name">大富翁</h2>
+          <p class="game-card-desc">双人 · 掷骰买地 · 收租盖房 · 破产判负</p>
+          <button id="create-monopoly" class="btn" type="button">创建房间</button>
         </article>
       </div>
 
@@ -144,6 +162,25 @@
     <footer class="game-actions">
       <button id="llk-restart-btn" class="btn" type="button" hidden>再来一局</button>
       <button id="llk-leave-btn" class="btn btn-ghost" type="button">返回大厅</button>
+    </footer>
+  </main>
+
+  <!-- ============================ 大富翁对局 ============================ -->
+  <main id="view-monopoly" class="view monopoly" hidden>
+    <header class="game-head panel">
+      <div class="room-info">
+        <span class="room-label">房间</span>
+        <code id="mono-room-code" class="room-code">------</code>
+        <button id="mono-copy-btn" class="btn btn-small" type="button">复制邀请链接</button>
+      </div>
+      <p id="mono-presence" class="presence" aria-live="off"></p>
+    </header>
+
+    <div id="monopoly-root" class="monopoly-root"></div>
+
+    <footer class="game-actions">
+      <button id="mono-restart-btn" class="btn" type="button" hidden>再来一局</button>
+      <button id="mono-leave-btn" class="btn btn-ghost" type="button">返回大厅</button>
     </footer>
   </main>
 </div>

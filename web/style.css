@@ -410,6 +410,7 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
 /* ============================ 平台首页 ============================ */
 .home {
   align-items: stretch;
+  max-width: 780px;
 }
 
 .home-card {
@@ -466,10 +467,10 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
 
 .game-picker {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   width: 100%;
-  max-width: 520px;
+  max-width: 760px;
 }
 
 .game-card {
@@ -794,6 +795,26 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
 
 .llk-root:empty::before {
   content: "正在加载连连看…";
+  display: block;
+  padding: 40px 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 大富翁容器（内部样式由 monopoly.css 提供） */
+.monopoly {
+  gap: 14px;
+}
+
+.monopoly-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.monopoly-root:empty::before {
+  content: "正在加载大富翁…";
   display: block;
   padding: 40px 16px;
   color: var(--text-muted);
@@ -1142,37 +1163,12 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   font-weight: 600;
 }
 
-/* ============================ 响应式 ============================ */
-@media (max-width: 560px) {
-  .app {
-    padding: 60px 14px calc(96px + env(safe-area-inset-bottom));
-  }
-
-  .theme-toggle {
-    top: calc(10px + env(safe-area-inset-top));
-    right: 10px;
-    padding: 7px 10px;
-  }
-
-  .theme-toggle-text {
-    display: none;
-  }
-
-  .home-card {
-    gap: 22px;
-    padding: 24px 16px 28px;
-  }
-
-  .title {
-    font-size: clamp(32px, 9.5vw, 44px);
-    letter-spacing: 0.12em;
-    padding-left: 0.12em;
-  }
-
+/* 窄屏：三张游戏卡片改为单列 */
+@media (max-width: 720px) {
   .game-picker {
     grid-template-columns: 1fr;
     gap: 12px;
-    max-width: 360px;
+    max-width: 420px;
   }
 
   .game-card {
@@ -1211,6 +1207,34 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
     width: auto;
     margin-left: auto;
     padding: 9px 12px;
+  }
+}
+
+/* ============================ 响应式 ============================ */
+@media (max-width: 560px) {
+  .app {
+    padding: 60px 14px calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .theme-toggle {
+    top: calc(10px + env(safe-area-inset-top));
+    right: 10px;
+    padding: 7px 10px;
+  }
+
+  .theme-toggle-text {
+    display: none;
+  }
+
+  .home-card {
+    gap: 22px;
+    padding: 24px 16px 28px;
+  }
+
+  .title {
+    font-size: clamp(32px, 9.5vw, 44px);
+    letter-spacing: 0.12em;
+    padding-left: 0.12em;
   }
 
   .room-code {

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import queue
@@ -29,7 +30,8 @@ from urllib.parse import parse_qs, urlparse
 
 GOMOKU = "gomoku"
 LIANLIAN = "lianliankan"
-GAMES = (GOMOKU, LIANLIAN)
+MONOPOLY = "monopoly"
+GAMES = (GOMOKU, LIANLIAN, MONOPOLY)
 
 SIZE = 15                     # 五子棋棋盘
 EMPTY, BLACK, WHITE, DRAW = 0, 1, 2, 3
@@ -37,6 +39,93 @@ EMPTY, BLACK, WHITE, DRAW = 0, 1, 2, 3
 LLK_SIZE = 8                  # 连连看棋盘 8x8
 LLK_TYPES = 16                # 图案种类
 LLK_PAIRS = LLK_SIZE * LLK_SIZE // 2   # 32 对
+
+# ---------------------------------------------------------------- 大富翁
+
+MONO_START_CASH = 1500
+MONO_GO_SALARY = 200
+MONO_JAIL_FINE = 50
+MONO_TAX = 100
+MONO_MAX_LEVEL = 5            # 4 栋房屋 + 1 座旅馆
+MONO_JAIL_ATTEMPTS = 3
+
+MONO_GROUP_COLORS = {"A": "#b07a4a", "B": "#5b9bd5", "C": "#e07aa8", "D": "#e0a03c"}
+
+# 24 格环形棋盘：角格 0/6/12/18，其余为地产 / 机会 / 税
+MONO_BOARD = [
+    {"type": "go", "name": "起点"},
+    {"type": "property", "name": "老城厢", "group": "A", "price": 60},
+    {"type": "property", "name": "城隍庙", "group": "A", "price": 60},
+    {"type": "chance", "name": "机会"},
+    {"type": "property", "name": "豫园", "group": "A", "price": 80},
+    {"type": "property", "name": "外滩", "group": "A", "price": 80},
+    {"type": "jail", "name": "监狱"},
+    {"type": "property", "name": "南京路", "group": "B", "price": 100},
+    {"type": "property", "name": "淮海路", "group": "B", "price": 100},
+    {"type": "tax", "name": "缴税"},
+    {"type": "property", "name": "新天地", "group": "B", "price": 120},
+    {"type": "property", "name": "陆家嘴", "group": "B", "price": 140},
+    {"type": "free", "name": "免费停车"},
+    {"type": "property", "name": "西湖", "group": "C", "price": 180},
+    {"type": "property", "name": "灵隐寺", "group": "C", "price": 180},
+    {"type": "chance", "name": "机会"},
+    {"type": "property", "name": "千岛湖", "group": "C", "price": 200},
+    {"type": "property", "name": "黄山", "group": "C", "price": 220},
+    {"type": "gotojail", "name": "进监狱"},
+    {"type": "property", "name": "故宫", "group": "D", "price": 280},
+    {"type": "property", "name": "长城", "group": "D", "price": 280},
+    {"type": "tax", "name": "缴税"},
+    {"type": "property", "name": "颐和园", "group": "D", "price": 320},
+    {"type": "property", "name": "兵马俑", "group": "D", "price": 350},
+]
+MONO_BOARD_SIZE = len(MONO_BOARD)
+
+MONO_GROUPS: dict[str, list[int]] = {}
+for _i, _tile in enumerate(MONO_BOARD):
+    if _tile["type"] == "property":
+        MONO_GROUPS.setdefault(_tile["group"], []).append(_i)
+
+MONO_CHANCE_CARDS = [
+    {"text": "银行分红，获得 $100", "money": 100},
+    {"text": "缴纳所得税 $100", "money": -100},
+    {"text": "前进到起点，领取 $200", "go": True},
+    {"text": "被警察送进监狱", "jail": True},
+    {"text": "获得一张「出狱许可」", "card": True},
+    {"text": "房屋维修：每栋房屋支付 $25", "repair": 25},
+    {"text": "中了彩票，获得 $150", "money": 150},
+    {"text": "交通罚单，支付 $50", "money": -50},
+]
+
+MONO_BOARD_STATE = []
+for _tile in MONO_BOARD:
+    _entry = dict(_tile)
+    if _entry["type"] == "property":
+        _entry["color"] = MONO_GROUP_COLORS[_entry["group"]]
+    else:
+        _entry["color"] = ""
+    _entry.setdefault("group", "")
+    _entry.setdefault("price", 0)
+    MONO_BOARD_STATE.append(_entry)
+
+
+def mono_house_cost(price: int) -> int:
+    return max(50, (price // 2) // 10 * 10)
+
+
+def mono_mortgage_value(price: int) -> int:
+    return price // 2
+
+
+def mono_unmortgage_cost(price: int) -> int:
+    return (price * 55 + 99) // 100
+
+
+def mono_rent(price: int, level: int) -> int:
+    """基础租金按房屋等级递增；level=0..5，5 为旅馆。"""
+    base = max(10, price // 10)
+    table = (1, 2, 4, 7, 10, 15)
+    return base * table[min(level, MONO_MAX_LEVEL)]
+
 
 UNDO_LIMIT = 3                # 每人每局悔棋次数
 
@@ -56,6 +145,8 @@ STATIC_FILES = {
     "/style.css": ("style.css", "text/css; charset=utf-8"),
     "/llk.js": ("llk.js", "text/javascript; charset=utf-8"),
     "/llk.css": ("llk.css", "text/css; charset=utf-8"),
+    "/monopoly.js": ("monopoly.js", "text/javascript; charset=utf-8"),
+    "/monopoly.css": ("monopoly.css", "text/css; charset=utf-8"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
     "/playlist.json": ("playlist.json", "application/json; charset=utf-8"),
 }
@@ -595,11 +686,508 @@ class LianliankanRoom(Room):
 
 
 
+def mono_action(fn):
+    """大富翁动作装饰器：成功（无错误码）后广播最新 state。"""
+
+    @functools.wraps(fn)
+    def wrapper(self, *args, **kwargs):
+        with self.lock:
+            result = fn(self, *args, **kwargs)
+            if result is None:
+                self._touch()
+                self._broadcast_locked()
+            return result
+
+    return wrapper
+
+
+class MonopolyRoom(Room):
+    """双人大富翁（完整简化版）：掷骰/买地/收租/盖房/抵押/监狱/机会卡/破产。"""
+    game = MONOPOLY
+
+    def __init__(self, room_id: str) -> None:
+        super().__init__(room_id)
+        self.started = False
+        self._reset_game_locked()
+
+    # -- 生命周期 -------------------------------------------------
+
+    def _reset_locked(self) -> None:
+        self._reset_game_locked()
+
+    def _reset_game_locked(self) -> None:
+        self.cash = {BLACK: MONO_START_CASH, WHITE: MONO_START_CASH}
+        self.pos = {BLACK: 0, WHITE: 0}
+        self.jail = {BLACK: False, WHITE: False}
+        self.jail_turns = {BLACK: 0, WHITE: 0}
+        self.jail_cards = {BLACK: 0, WHITE: 0}
+        self.owners = [0] * MONO_BOARD_SIZE
+        self.houses = [0] * MONO_BOARD_SIZE
+        self.mortgaged = [False] * MONO_BOARD_SIZE
+        self.turn = BLACK
+        self.phase = "roll"
+        self.dice = None
+        self.doubles = 0
+        self.pending = None
+        self.log: list[str] = []
+        self.winner = 0
+        self.started = self.players[WHITE] is not None
+        self._log("新一局开始，黑方先掷骰")
+
+    def join(self, token: str) -> tuple[int, str | None]:
+        with self.lock:
+            color, new_token = super().join(token)
+            if color == WHITE and not self.started:
+                self.started = True
+                self.phase = "roll"
+                self._log("对手已加入，对局开始，黑方先行")
+                self._broadcast_locked()
+            return color, new_token
+
+    # -- 工具 -----------------------------------------------------
+
+    def _name(self, color: int) -> str:
+        return "黑方" if color == BLACK else "白方"
+
+    @staticmethod
+    def _other(color: int) -> int:
+        return WHITE if color == BLACK else BLACK
+
+    def _log(self, message: str) -> None:
+        self.log.append(message)
+        if len(self.log) > 10:
+            self.log = self.log[-10:]
+
+    def _is_property(self, index: int) -> bool:
+        return 0 <= index < MONO_BOARD_SIZE and MONO_BOARD[index]["type"] == "property"
+
+    def _group_owned(self, color: int, group: str) -> bool:
+        return all(self.owners[i] == color for i in MONO_GROUPS[group])
+
+    def _can_end_turn_locked(self) -> bool:
+        if self.phase == "action":
+            return True
+        return self.phase == "roll" and self.dice is not None and self.pending is None
+
+    def _next_turn_locked(self) -> None:
+        nxt = self._other(self.turn)
+        self.turn = nxt
+        self.phase = "roll"
+        self.dice = None
+        self.doubles = 0
+        self.pending = None
+        self._log("轮到%s%s" % (self._name(nxt), "（在监狱中）" if self.jail[nxt] else ""))
+
+    # -- 状态 -----------------------------------------------------
+
+    def extra_state_locked(self) -> dict:
+        if self.players[WHITE] is None:
+            phase = "waiting"
+        elif self.winner:
+            phase = "over"
+        else:
+            phase = self.phase
+        pending = None
+        if self.pending:
+            tile = MONO_BOARD[self.pending["tile"]]
+            pending = {"type": "buy", "tile": self.pending["tile"], "price": tile["price"]}
+        return {
+            "turn": self.turn,
+            "phase": phase,
+            "dice": self.dice,
+            "doubles": self.doubles,
+            "pending": pending,
+            "cash": {"black": self.cash[BLACK], "white": self.cash[WHITE]},
+            "pos": {"black": self.pos[BLACK], "white": self.pos[WHITE]},
+            "jail": {"black": self.jail[BLACK], "white": self.jail[WHITE]},
+            "jailTurns": {"black": self.jail_turns[BLACK], "white": self.jail_turns[WHITE]},
+            "jailCards": {"black": self.jail_cards[BLACK], "white": self.jail_cards[WHITE]},
+            "owners": list(self.owners),
+            "houses": list(self.houses),
+            "mortgaged": list(self.mortgaged),
+            "board": MONO_BOARD_STATE,
+            "canEndTurn": (phase != "waiting" and not self.winner and self._can_end_turn_locked()),
+            "log": list(self.log),
+        }
+
+    # -- 金钱 / 清算 ----------------------------------------------
+
+    def _charge_locked(self, payer: int, amount: int, recipient: int | None = None) -> bool:
+        """扣款；不足时自动卖房/抵押；仍不足则破产。返回是否支付成功。"""
+        if amount <= 0:
+            return True
+        if self.cash[payer] < amount:
+            self._liquidate_locked(payer, amount)
+        if self.cash[payer] < amount:
+            winner = self._other(payer)
+            if recipient:
+                self.cash[recipient] += self.cash[payer]
+            self.cash[payer] = 0
+            self.winner = winner
+            self.phase = "over"
+            self.pending = None
+            self._log("%s 破产，%s 获胜！" % (self._name(payer), self._name(winner)))
+            return False
+        self.cash[payer] -= amount
+        if recipient:
+            self.cash[recipient] += amount
+        return True
+
+    def _liquidate_locked(self, color: int, target: int) -> None:
+        while self.cash[color] < target:
+            candidates = [
+                i for i in range(MONO_BOARD_SIZE)
+                if self.owners[i] == color and self.houses[i] > 0
+            ]
+            if not candidates:
+                break
+            index = max(candidates, key=lambda i: self.houses[i])
+            self.houses[index] -= 1
+            price = MONO_BOARD[index]["price"]
+            self.cash[color] += mono_house_cost(price) // 2
+            self._log("%s 变卖「%s」一处房产" % (self._name(color), MONO_BOARD[index]["name"]))
+        while self.cash[color] < target:
+            candidates = [
+                i for i in range(MONO_BOARD_SIZE)
+                if self.owners[i] == color and self.houses[i] == 0 and not self.mortgaged[i]
+            ]
+            if not candidates:
+                break
+            index = candidates[0]
+            self.mortgaged[index] = True
+            price = MONO_BOARD[index]["price"]
+            self.cash[color] += mono_mortgage_value(price)
+            self._log("%s 抵押「%s」换取现金" % (self._name(color), MONO_BOARD[index]["name"]))
+
+    # -- 移动 / 落地 ----------------------------------------------
+
+    def _move_locked(self, color: int, steps: int) -> None:
+        old = self.pos[color]
+        total = old + steps
+        # 只有「越过」起点（非正好落在起点）时在这里发工资；落在起点由落地逻辑发放
+        if steps > 0 and total > MONO_BOARD_SIZE:
+            self.cash[color] += MONO_GO_SALARY
+            self._log("%s 经过起点，领取 $%d" % (self._name(color), MONO_GO_SALARY))
+        self.pos[color] = total % MONO_BOARD_SIZE
+
+    def _send_to_jail_locked(self, color: int, reason: str) -> None:
+        self.pos[color] = 6
+        self.jail[color] = True
+        self.jail_turns[color] = 0
+        if reason:
+            self._log(reason)
+
+    def _draw_chance_locked(self, color: int) -> str:
+        card = random.choice(MONO_CHANCE_CARDS)
+        self._log("机会卡：%s" % card["text"])
+        if card.get("money"):
+            amount = card["money"]
+            if amount > 0:
+                self.cash[color] += amount
+            elif not self._charge_locked(color, -amount):
+                return "over"
+        elif card.get("go"):
+            self.pos[color] = 0
+            self.cash[color] += MONO_GO_SALARY
+            self._log("%s 回到起点，领取 $%d" % (self._name(color), MONO_GO_SALARY))
+        elif card.get("jail"):
+            self._send_to_jail_locked(color, "%s 被送进监狱" % self._name(color))
+            self._next_turn_locked()
+            return "ended"
+        elif card.get("card"):
+            self.jail_cards[color] += 1
+            self._log("%s 获得一张出狱许可" % self._name(color))
+        elif card.get("repair"):
+            houses = sum(self.houses[i] for i in range(MONO_BOARD_SIZE) if self.owners[i] == color)
+            cost = houses * card["repair"]
+            self._log("%s 支付房屋维修费 $%d" % (self._name(color), cost))
+            if cost and not self._charge_locked(color, cost):
+                return "over"
+        return "ok"
+
+    def _resolve_landing_locked(self, color: int) -> str:
+        index = self.pos[color]
+        tile = MONO_BOARD[index]
+        kind = tile["type"]
+        if kind == "go":
+            self.cash[color] += MONO_GO_SALARY
+            self._log("%s 落在起点，领取 $%d" % (self._name(color), MONO_GO_SALARY))
+            return "ok"
+        if kind == "free":
+            self._log("%s 在免费停车场休息" % self._name(color))
+            return "ok"
+        if kind == "jail":
+            self._log("%s 只是来探监" % self._name(color))
+            return "ok"
+        if kind == "gotojail":
+            self._send_to_jail_locked(color, "%s 踩到「进监狱」，被送进监狱" % self._name(color))
+            self._next_turn_locked()
+            return "ended"
+        if kind == "tax":
+            self._log("%s 缴纳 $%d 税款" % (self._name(color), MONO_TAX))
+            if not self._charge_locked(color, MONO_TAX):
+                return "over"
+            return "ok"
+        if kind == "chance":
+            return self._draw_chance_locked(color)
+
+        owner = self.owners[index]
+        price = tile["price"]
+        if owner == 0:
+            self.pending = {"type": "buy", "tile": index}
+            self.phase = "buy"
+            self._log("%s 可购买「%s」（$%d）" % (self._name(color), tile["name"], price))
+            return "buy"
+        if owner == color:
+            self._log("%s 回到自己的「%s」" % (self._name(color), tile["name"]))
+            return "ok"
+        if self.mortgaged[index]:
+            self._log("「%s」已抵押，无需支付租金" % tile["name"])
+            return "ok"
+        rent = mono_rent(price, self.houses[index])
+        if self.houses[index] == 0 and self._group_owned(owner, tile["group"]):
+            rent *= 2
+            self._log("整组持有，基础租金翻倍")
+        self._log("%s 向%s支付「%s」租金 $%d" % (
+            self._name(color), self._name(owner), tile["name"], rent))
+        if not self._charge_locked(color, rent, recipient=owner):
+            return "over"
+        return "ok"
+
+    # -- 玩家动作 -------------------------------------------------
+
+    @mono_action
+    def roll(self, token: str) -> str | None:
+        with self.lock:
+            color = self._player_color(token)
+            if color is None:
+                return "not_player"
+            if self.players[WHITE] is None:
+                return "invalid_phase"
+            if self.winner:
+                return "game_over"
+            if color != self.turn:
+                return "not_your_turn"
+            if self.phase != "roll" or self.pending:
+                return "invalid_phase"
+
+            d1 = random.randint(1, 6)
+            d2 = random.randint(1, 6)
+            total = d1 + d2
+            self.dice = [d1, d2]
+            self._log("%s 掷出 %d + %d = %d%s" % (
+                self._name(color), d1, d2, total, "（双数）" if d1 == d2 else ""))
+
+            if self.jail[color]:
+                if d1 == d2:
+                    self.jail[color] = False
+                    self.jail_turns[color] = 0
+                    self._log("%s 掷出双数，走出监狱！" % self._name(color))
+                    self._move_locked(color, total)
+                    status = self._resolve_landing_locked(color)
+                    if status in ("ended", "over", "buy"):
+                        return None
+                    self.phase = "action"
+                    return None
+                self.jail_turns[color] += 1
+                if self.jail_turns[color] >= MONO_JAIL_ATTEMPTS:
+                    self._log("%s 三次未掷出双数，缴纳 $%d 保释金出狱" % (
+                        self._name(color), MONO_JAIL_FINE))
+                    if not self._charge_locked(color, MONO_JAIL_FINE):
+                        return None
+                    self.jail[color] = False
+                    self.jail_turns[color] = 0
+                    self._move_locked(color, total)
+                    status = self._resolve_landing_locked(color)
+                    if status in ("ended", "over", "buy"):
+                        return None
+                    self.phase = "action"
+                    return None
+                self._log("%s 未掷出双数，继续留在监狱" % self._name(color))
+                self._next_turn_locked()
+                return None
+
+            if d1 == d2:
+                self.doubles += 1
+                if self.doubles >= 3:
+                    self._log("%s 连续三次双数，被送进监狱" % self._name(color))
+                    self._send_to_jail_locked(color, "")
+                    self._next_turn_locked()
+                    return None
+
+            self._move_locked(color, total)
+            status = self._resolve_landing_locked(color)
+            if self.winner or status in ("ended", "buy", "over"):
+                return None
+            if d1 == d2:
+                self.phase = "roll"
+                self._log("%s 掷出双数，可再掷一次" % self._name(color))
+            else:
+                self.phase = "action"
+            return None
+
+    @mono_action
+    def buy(self, token: str, action: str) -> str | None:
+        with self.lock:
+            color = self._player_color(token)
+            if color is None:
+                return "not_player"
+            if self.winner:
+                return "game_over"
+            if color != self.turn:
+                return "not_your_turn"
+            if self.phase != "buy" or not self.pending:
+                return "invalid_phase"
+            if action not in ("buy", "pass"):
+                return "invalid_move"
+            index = self.pending["tile"]
+            tile = MONO_BOARD[index]
+            if action == "buy":
+                if self.cash[color] < tile["price"]:
+                    return "cannot_afford"
+                self.cash[color] -= tile["price"]
+                self.owners[index] = color
+                self._log("%s 购买「%s」（$%d）" % (self._name(color), tile["name"], tile["price"]))
+            else:
+                self._log("%s 放弃购买「%s」" % (self._name(color), tile["name"]))
+            self.pending = None
+            if self.doubles > 0:
+                self.phase = "roll"
+                self._log("%s 掷出双数，可再掷一次" % self._name(color))
+            else:
+                self.phase = "action"
+            return None
+
+    @mono_action
+    def jail_action(self, token: str, action: str) -> str | None:
+        with self.lock:
+            color = self._player_color(token)
+            if color is None:
+                return "not_player"
+            if self.winner:
+                return "game_over"
+            if color != self.turn:
+                return "not_your_turn"
+            if self.phase != "roll":
+                return "invalid_phase"
+            if not self.jail[color]:
+                return "invalid_phase"
+            if action == "pay":
+                self._log("%s 缴纳 $%d 保释金" % (self._name(color), MONO_JAIL_FINE))
+                if not self._charge_locked(color, MONO_JAIL_FINE):
+                    return None
+                self.jail[color] = False
+                self.jail_turns[color] = 0
+                return None
+            if action == "card":
+                if self.jail_cards[color] <= 0:
+                    return "no_card"
+                self.jail_cards[color] -= 1
+                self.jail[color] = False
+                self.jail_turns[color] = 0
+                self._log("%s 使用出狱许可，走出监狱" % self._name(color))
+                return None
+            return "invalid_move"
+
+    @mono_action
+    def build(self, token: str, index: int) -> str | None:
+        with self.lock:
+            color = self._player_color(token)
+            if color is None:
+                return "not_player"
+            if self.winner:
+                return "game_over"
+            if color != self.turn:
+                return "not_your_turn"
+            if self.phase not in ("action", "roll") or self.pending:
+                return "invalid_phase"
+            if not self._is_property(index):
+                return "invalid_move"
+            tile = MONO_BOARD[index]
+            if self.owners[index] != color:
+                return "invalid_move"
+            if self.mortgaged[index]:
+                return "invalid_move"
+            if self.houses[index] >= MONO_MAX_LEVEL:
+                return "invalid_move"
+            group = tile["group"]
+            if not self._group_owned(color, group):
+                return "invalid_group"
+            min_level = min(self.houses[i] for i in MONO_GROUPS[group])
+            if self.houses[index] != min_level:
+                return "invalid_group"
+            cost = mono_house_cost(tile["price"])
+            if self.cash[color] < cost:
+                return "cannot_afford"
+            self.cash[color] -= cost
+            self.houses[index] += 1
+            level = self.houses[index]
+            label = "旅馆" if level >= MONO_MAX_LEVEL else "%d 栋房屋" % level
+            self._log("%s 在「%s」建造%s（$%d）" % (self._name(color), tile["name"], label, cost))
+            return None
+
+    @mono_action
+    def mortgage(self, token: str, index: int, action: str) -> str | None:
+        with self.lock:
+            color = self._player_color(token)
+            if color is None:
+                return "not_player"
+            if self.winner:
+                return "game_over"
+            if color != self.turn:
+                return "not_your_turn"
+            if self.phase not in ("action", "roll") or self.pending:
+                return "invalid_phase"
+            if not self._is_property(index):
+                return "invalid_move"
+            tile = MONO_BOARD[index]
+            if self.owners[index] != color:
+                return "invalid_move"
+            if action == "mortgage":
+                if self.mortgaged[index]:
+                    return "invalid_move"
+                if self.houses[index] > 0:
+                    return "has_houses"
+                self.mortgaged[index] = True
+                self.cash[color] += mono_mortgage_value(tile["price"])
+                self._log("%s 抵押「%s」获得 $%d" % (
+                    self._name(color), tile["name"], mono_mortgage_value(tile["price"])))
+                return None
+            if action == "unmortgage":
+                if not self.mortgaged[index]:
+                    return "invalid_move"
+                cost = mono_unmortgage_cost(tile["price"])
+                if self.cash[color] < cost:
+                    return "cannot_afford"
+                self.cash[color] -= cost
+                self.mortgaged[index] = False
+                self._log("%s 赎回「%s」支付 $%d" % (self._name(color), tile["name"], cost))
+                return None
+            return "invalid_move"
+
+    @mono_action
+    def end_turn(self, token: str) -> str | None:
+        with self.lock:
+            color = self._player_color(token)
+            if color is None:
+                return "not_player"
+            if self.winner:
+                return "game_over"
+            if color != self.turn:
+                return "not_your_turn"
+            if self.pending:
+                return "invalid_phase"
+            if not self._can_end_turn_locked():
+                return "invalid_phase"
+            self._next_turn_locked()
+            return None
+
+
 # ---------------------------------------------------------------- 房间注册表
 
 ROOMS: dict[str, Room] = {}
 ROOMS_LOCK = threading.Lock()
-ROOM_CLASSES = {GOMOKU: GomokuRoom, LIANLIAN: LianliankanRoom}
+ROOM_CLASSES = {GOMOKU: GomokuRoom, LIANLIAN: LianliankanRoom, MONOPOLY: MonopolyRoom}
 
 
 def create_room(game: str) -> Room:
@@ -735,6 +1323,12 @@ class Handler(BaseHTTPRequestHandler):
             "/api/hint": self._handle_hint,
             "/api/shuffle": self._handle_shuffle,
             "/api/undo": self._handle_undo,
+            "/api/roll": self._handle_mono_roll,
+            "/api/buy": self._handle_mono_buy,
+            "/api/jail": self._handle_mono_jail,
+            "/api/build": self._handle_mono_build,
+            "/api/mortgage": self._handle_mono_mortgage,
+            "/api/endturn": self._handle_mono_endturn,
             "/api/restart": self._handle_restart,
         }
         handler = routes.get(parsed.path)
@@ -883,6 +1477,87 @@ class Handler(BaseHTTPRequestHandler):
             return
         action = str(data.get("action") or "").strip().lower()
         error = room.undo(token, action)
+        if error is not None:
+            self._error(400, error)
+            return
+        self._send_json(200, {"ok": True})
+
+    def _mono_room(self, data: dict) -> tuple[MonopolyRoom | None, str]:
+        room_id, token = self._room_token(data)
+        room = self._room_or_error(room_id)
+        if room is None:
+            return None, token
+        if room.game != MONOPOLY:
+            self._error(400, "wrong_game")
+            return None, token
+        return room, token
+
+    def _handle_mono_roll(self, data: dict) -> None:
+        room, token = self._mono_room(data)
+        if room is None:
+            return
+        error = room.roll(token)
+        if error is not None:
+            self._error(400, error)
+            return
+        self._send_json(200, {"ok": True})
+
+    def _handle_mono_buy(self, data: dict) -> None:
+        room, token = self._mono_room(data)
+        if room is None:
+            return
+        action = str(data.get("action") or "").strip().lower()
+        error = room.buy(token, action)
+        if error is not None:
+            self._error(400, error)
+            return
+        self._send_json(200, {"ok": True})
+
+    def _handle_mono_jail(self, data: dict) -> None:
+        room, token = self._mono_room(data)
+        if room is None:
+            return
+        action = str(data.get("action") or "").strip().lower()
+        error = room.jail_action(token, action)
+        if error is not None:
+            self._error(400, error)
+            return
+        self._send_json(200, {"ok": True})
+
+    def _handle_mono_build(self, data: dict) -> None:
+        room, token = self._mono_room(data)
+        if room is None:
+            return
+        tile = data.get("tile")
+        if type(tile) is not int:
+            self._error(400, "invalid_move")
+            return
+        error = room.build(token, tile)
+        if error is not None:
+            self._error(400, error)
+            return
+        self._send_json(200, {"ok": True})
+
+    def _handle_mono_mortgage(self, data: dict) -> None:
+        room, token = self._mono_room(data)
+        if room is None:
+            return
+        tile = data.get("tile")
+        action = str(data.get("action") or "").strip().lower()
+        if type(tile) is not int:
+            self._error(400, "invalid_move")
+            return
+        error = room.mortgage(token, tile, action)
+        if error is not None:
+            self._error(400, error)
+            return
+        self._send_json(200, {"ok": True})
+
+    def _handle_mono_endturn(self, data: dict) -> None:
+        room, token = self._mono_room(data)
+        if room is None:
+            return
+        error = room.end_turn(token)
         if error is not None:
             self._error(400, error)
             return

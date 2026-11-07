@@ -1,0 +1,1048 @@
+/* ==========================================================================
+   大富翁（Monopoly）前端模块样式 —— web/monopoly.css
+   --------------------------------------------------------------------------
+   · 依赖 web/style.css 的 CSS 变量（--text / --text-muted / --glass /
+     --glass-strong / --border / --border-strong / --shadow-lg / --focus-ring /
+     --accent / --accent-text），所有变量都带兜底值，单独加载也能显示。
+   · 不引入任何外域资源；颜色完全来自变量，自动适配明暗主题。
+   · 所有规则作用域限定在 .mono / #monopoly-root，避免影响其他游戏。
+   ========================================================================== */
+
+#monopoly-root {
+  width: 100%;
+  min-width: 0;
+}
+
+#monopoly-root:empty {
+  display: none;
+}
+
+.mono,
+.mono *,
+.mono *::before,
+.mono *::after {
+  box-sizing: border-box;
+}
+
+.mono [hidden] {
+  display: none !important;
+}
+
+/* ============================ 设计变量 · 明亮 ============================ */
+
+.mono {
+  --mono-fg: var(--text, #14161b);
+  --mono-muted: var(--text-muted, #5d6470);
+  --mono-border: var(--border, rgba(20, 26, 40, 0.12));
+  --mono-border-strong: var(--border-strong, rgba(20, 26, 40, 0.34));
+  --mono-glass: var(--glass, rgba(255, 255, 255, 0.58));
+  --mono-glass-strong: var(--glass-strong, rgba(255, 255, 255, 0.84));
+  --mono-highlight: var(--panel-highlight, rgba(255, 255, 255, 0.7));
+  --mono-shadow: var(--shadow-lg, 0 32px 64px -32px rgba(20, 30, 55, 0.45), 0 2px 10px rgba(20, 30, 55, 0.07));
+  --mono-shadow-sm: var(--shadow-sm, 0 8px 24px -14px rgba(20, 30, 55, 0.45));
+  --mono-focus: var(--focus-ring, rgba(20, 22, 27, 0.6));
+  --mono-accent: var(--accent, #14161b);
+  --mono-accent-text: var(--accent-text, #ffffff);
+
+  --mono-board-bg: linear-gradient(155deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.34) 58%, rgba(255, 255, 255, 0.5));
+  --mono-board-border: var(--glass-border, rgba(255, 255, 255, 0.72));
+  --mono-tile-bg: rgba(255, 255, 255, 0.72);
+  --mono-tile-hover: rgba(255, 255, 255, 0.94);
+  --mono-tile-border: rgba(20, 26, 40, 0.13);
+  --mono-tile-icon-bg: rgba(255, 255, 255, 0.82);
+  --mono-corner-bg: rgba(20, 26, 40, 0.075);
+  --mono-chance-bg: rgba(90, 120, 220, 0.13);
+  --mono-tax-bg: rgba(220, 120, 80, 0.13);
+  --mono-center-bg: rgba(255, 255, 255, 0.52);
+  --mono-center-border: rgba(255, 255, 255, 0.66);
+  --mono-cash-bg: rgba(255, 255, 255, 0.62);
+  --mono-btn-bg: rgba(255, 255, 255, 0.74);
+  --mono-die-bg: #ffffff;
+  --mono-die-border: rgba(20, 26, 40, 0.2);
+  --mono-die-dot: #14161b;
+  --mono-house: #2b2f38;
+  --mono-hotel: #a86f3e;
+  --mono-own-black-ring: rgba(20, 22, 27, 0.4);
+  --mono-own-white-ring: rgba(255, 255, 255, 0.95);
+  --mono-own-white-ring2: rgba(20, 22, 27, 0.28);
+  --mono-mortgage-bg: rgba(20, 22, 27, 0.7);
+  --mono-mortgage-fg: #ffffff;
+  --mono-log-new-bg: rgba(110, 145, 255, 0.16);
+  --mono-chip-bg: rgba(20, 26, 40, 0.06);
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  color: var(--mono-fg);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+/* ============================ 设计变量 · 暗黑 ============================ */
+
+html[data-theme="dark"] .mono {
+  --mono-board-bg: linear-gradient(155deg, rgba(48, 55, 72, 0.55), rgba(16, 19, 26, 0.62) 58%, rgba(30, 35, 46, 0.5));
+  --mono-board-border: rgba(255, 255, 255, 0.1);
+  --mono-tile-bg: rgba(255, 255, 255, 0.06);
+  --mono-tile-hover: rgba(255, 255, 255, 0.13);
+  --mono-tile-border: rgba(255, 255, 255, 0.11);
+  --mono-tile-icon-bg: rgba(255, 255, 255, 0.08);
+  --mono-corner-bg: rgba(255, 255, 255, 0.07);
+  --mono-chance-bg: rgba(90, 120, 220, 0.22);
+  --mono-tax-bg: rgba(220, 120, 80, 0.2);
+  --mono-center-bg: rgba(8, 10, 15, 0.34);
+  --mono-center-border: rgba(255, 255, 255, 0.09);
+  --mono-cash-bg: rgba(255, 255, 255, 0.05);
+  --mono-btn-bg: rgba(255, 255, 255, 0.08);
+  --mono-die-bg: #e9ecf2;
+  --mono-die-border: rgba(255, 255, 255, 0.3);
+  --mono-die-dot: #0b0d12;
+  --mono-house: #d6dae3;
+  --mono-hotel: #e0a03c;
+  --mono-own-black-ring: rgba(255, 255, 255, 0.5);
+  --mono-own-white-ring: rgba(255, 255, 255, 0.9);
+  --mono-own-white-ring2: rgba(20, 22, 27, 0.55);
+  --mono-mortgage-bg: rgba(255, 255, 255, 0.78);
+  --mono-mortgage-fg: #0b0d12;
+  --mono-log-new-bg: rgba(120, 155, 255, 0.2);
+  --mono-chip-bg: rgba(255, 255, 255, 0.07);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .mono {
+    --mono-board-bg: linear-gradient(155deg, rgba(48, 55, 72, 0.55), rgba(16, 19, 26, 0.62) 58%, rgba(30, 35, 46, 0.5));
+    --mono-board-border: rgba(255, 255, 255, 0.1);
+    --mono-tile-bg: rgba(255, 255, 255, 0.06);
+    --mono-tile-hover: rgba(255, 255, 255, 0.13);
+    --mono-tile-border: rgba(255, 255, 255, 0.11);
+    --mono-tile-icon-bg: rgba(255, 255, 255, 0.08);
+    --mono-corner-bg: rgba(255, 255, 255, 0.07);
+    --mono-chance-bg: rgba(90, 120, 220, 0.22);
+    --mono-tax-bg: rgba(220, 120, 80, 0.2);
+    --mono-center-bg: rgba(8, 10, 15, 0.34);
+    --mono-center-border: rgba(255, 255, 255, 0.09);
+    --mono-cash-bg: rgba(255, 255, 255, 0.05);
+    --mono-btn-bg: rgba(255, 255, 255, 0.08);
+    --mono-die-bg: #e9ecf2;
+    --mono-die-border: rgba(255, 255, 255, 0.3);
+    --mono-die-dot: #0b0d12;
+    --mono-house: #d6dae3;
+    --mono-hotel: #e0a03c;
+    --mono-own-black-ring: rgba(255, 255, 255, 0.5);
+    --mono-own-white-ring: rgba(255, 255, 255, 0.9);
+    --mono-own-white-ring2: rgba(20, 22, 27, 0.55);
+    --mono-mortgage-bg: rgba(255, 255, 255, 0.78);
+    --mono-mortgage-fg: #0b0d12;
+    --mono-log-new-bg: rgba(120, 155, 255, 0.2);
+    --mono-chip-bg: rgba(255, 255, 255, 0.07);
+  }
+}
+
+/* ============================ 棋盘 ============================ */
+
+.mono-stage {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.mono-board {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(7, minmax(0, 1fr));
+  gap: clamp(2px, 0.55vw, 4px);
+  /* 与五子棋一致：短屏按视口高度收缩，避免盖住底部操作区/音乐胶囊 */
+  width: min(100%, 660px, max(260px, calc(100vh - 330px)));
+  width: min(100%, 660px, max(260px, calc(100dvh - 330px)));
+  aspect-ratio: 1 / 1;
+  padding: clamp(4px, 1vw, 8px);
+  border: 1px solid var(--mono-board-border);
+  border-radius: clamp(14px, 2.6vw, 22px);
+  background: var(--mono-board-bg);
+  box-shadow: var(--mono-shadow);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ---------- 格子 ---------- */
+
+.mono-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: clamp(2px, 0.6vw, 4px);
+  border: 1px solid var(--mono-tile-border);
+  border-radius: clamp(5px, 1.1vw, 9px);
+  background: var(--mono-tile-bg);
+  color: var(--mono-fg);
+  font: inherit;
+  font-size: clamp(7px, 2.35vw, 11px);
+  line-height: 1.12;
+  text-align: center;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.mono-tile:disabled {
+  opacity: 1;
+  color: var(--mono-fg);
+}
+
+.mono-tile.is-selectable {
+  cursor: pointer;
+}
+
+.mono-tile.is-selectable:hover {
+  background: var(--mono-tile-hover);
+  border-color: var(--mono-border-strong);
+}
+
+.mono-tile:focus-visible {
+  outline: 2px solid var(--mono-focus);
+  outline-offset: 2px;
+  z-index: 2;
+}
+
+.mono-tile.is-selected {
+  outline: 2px solid var(--mono-focus);
+  outline-offset: 1px;
+  z-index: 2;
+}
+
+.mono-tile--go,
+.mono-tile--jail,
+.mono-tile--free,
+.mono-tile--gotojail {
+  background: var(--mono-corner-bg);
+}
+
+.mono-tile--chance {
+  background: var(--mono-chance-bg);
+}
+
+.mono-tile--tax {
+  background: var(--mono-tax-bg);
+}
+
+.mono-tile.is-owned-black {
+  box-shadow: inset 0 0 0 2px var(--mono-own-black-ring);
+}
+
+.mono-tile.is-owned-white {
+  box-shadow: inset 0 0 0 2px var(--mono-own-white-ring), inset 0 0 0 3px var(--mono-own-white-ring2);
+}
+
+.mono-tile.is-current {
+  border-color: var(--mono-fg);
+}
+
+.mono-tile.is-mortgaged {
+  opacity: 0.72;
+}
+
+.mono-tile.is-flash {
+  animation: mono-tile-flash 0.8s ease-out;
+}
+
+@keyframes mono-tile-flash {
+  0% {
+    background-color: rgba(224, 170, 72, 0.6);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* 地产组色条 */
+.mono-tile-group {
+  display: block;
+  flex: 0 0 auto;
+  width: 100%;
+  height: clamp(3px, 0.9vw, 5px);
+  margin-bottom: 1px;
+  border-radius: 2px;
+}
+
+.mono-tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: clamp(15px, 4.4vw, 23px);
+  height: clamp(15px, 4.4vw, 23px);
+  margin-top: clamp(1px, 0.5vw, 3px);
+  border: 1px solid var(--mono-border);
+  border-radius: 50%;
+  background: var(--mono-tile-icon-bg);
+  color: var(--mono-fg);
+  font-size: clamp(8px, 2.1vw, 12px);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mono-tile.is-corner .mono-tile-icon {
+  width: clamp(18px, 5.4vw, 28px);
+  height: clamp(18px, 5.4vw, 28px);
+  font-size: clamp(9px, 2.4vw, 13px);
+}
+
+.mono-tile-name {
+  display: -webkit-box;
+  width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.mono-tile.is-long-name .mono-tile-name {
+  font-size: 0.92em;
+}
+
+.mono-tile-price {
+  width: 100%;
+  overflow: hidden;
+  color: var(--mono-muted);
+  font-size: 0.86em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mono-tile-badges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: clamp(5px, 1.5vw, 9px);
+  margin-top: auto;
+  overflow: hidden;
+}
+
+.mono-tile-houses {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.mono-house {
+  display: block;
+  width: clamp(3px, 1vw, 6px);
+  height: clamp(3px, 1vw, 6px);
+  border-radius: 1px;
+  background: var(--mono-house);
+}
+
+.mono-house.is-hotel {
+  width: clamp(9px, 2.6vw, 15px);
+  height: clamp(4px, 1.2vw, 7px);
+  border-radius: 2px;
+  background: var(--mono-hotel);
+}
+
+.mono-tile-owner {
+  display: block;
+  width: clamp(5px, 1.5vw, 9px);
+  height: clamp(5px, 1.5vw, 9px);
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.mono-tile-owner.is-black {
+  background: #16181d;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+.mono-tile-owner.is-white {
+  background: #f6f7fa;
+  box-shadow: inset 0 0 0 1px rgba(20, 22, 27, 0.5);
+}
+
+.mono-tile-mortgage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  border-radius: 3px;
+  background: var(--mono-mortgage-bg);
+  color: var(--mono-mortgage-fg);
+  font-size: clamp(6px, 1.6vw, 9px);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* ---------- 棋子 ---------- */
+
+.mono-tile-tokens {
+  position: absolute;
+  right: 4%;
+  bottom: 3%;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.mono-token {
+  display: block;
+  width: clamp(8px, 2.3vw, 14px);
+  height: clamp(8px, 2.3vw, 14px);
+  border-radius: 50%;
+}
+
+.mono-token--black {
+  background: radial-gradient(circle at 32% 28%, #5a5d66, #14161b 62%, #050608);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.mono-token--white {
+  background: radial-gradient(circle at 32% 28%, #ffffff, #e8eaf0 62%, #b9bcc6);
+  border: 1px solid rgba(20, 22, 27, 0.45);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.mono-token.is-mine {
+  outline: 2px solid var(--mono-accent);
+  outline-offset: 1px;
+}
+
+.mono-token.is-hopping {
+  animation: mono-token-hop 0.16s ease-out;
+}
+
+@keyframes mono-token-hop {
+  0% {
+    transform: scale(0.78);
+  }
+  60% {
+    transform: scale(1.16);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ============================ 中央信息区 ============================ */
+
+.mono-center {
+  position: relative;
+  grid-row: 2 / 7;
+  grid-column: 2 / 7;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: clamp(4px, 1.1vw, 9px);
+  min-width: 0;
+  min-height: 0;
+  padding: clamp(6px, 1.6vw, 16px);
+  border: 1px solid var(--mono-center-border);
+  border-radius: clamp(10px, 2.4vw, 18px);
+  background: var(--mono-center-bg);
+  box-shadow: inset 0 1px 0 var(--mono-highlight);
+  overflow: hidden;
+  text-align: center;
+}
+
+.mono-turn-main {
+  margin: 0;
+  font-size: clamp(11px, 2.6vw, 15px);
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.mono-turn-sub {
+  margin: 0;
+  color: var(--mono-muted);
+  font-size: clamp(9px, 1.9vw, 11px);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 骰子 ---------- */
+
+.mono-dice-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.mono-dice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(4px, 1.4vw, 8px);
+}
+
+.mono-die {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 2px;
+  width: clamp(24px, 7vw, 40px);
+  aspect-ratio: 1 / 1;
+  padding: 12%;
+  border: 1px solid var(--mono-die-border);
+  border-radius: clamp(4px, 1.1vw, 8px);
+  background: var(--mono-die-bg);
+  box-shadow: 0 4px 10px -6px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.mono-die-dot {
+  display: block;
+  align-self: center;
+  justify-self: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: var(--mono-die-dot);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.mono-die-dot.is-on {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.mono-die[data-face="0"]::after {
+  content: "?";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mono-muted);
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.mono-dice.is-rolling .mono-die {
+  animation: mono-dice-shake 0.22s ease-in-out infinite alternate;
+}
+
+@keyframes mono-dice-shake {
+  from {
+    transform: translateY(-1px) rotate(-3deg);
+  }
+  to {
+    transform: translateY(1px) rotate(3deg);
+  }
+}
+
+.mono-dice-sum {
+  margin: 0;
+  min-height: 1em;
+  color: var(--mono-muted);
+  font-size: clamp(9px, 1.9vw, 11px);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 现金面板 ---------- */
+
+.mono-cash-row {
+  display: flex;
+  gap: clamp(4px, 1.2vw, 8px);
+  flex: 0 0 auto;
+}
+
+.mono-cash {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: clamp(3px, 1vw, 7px) clamp(4px, 1.2vw, 9px);
+  border: 1px solid var(--mono-border);
+  border-radius: clamp(7px, 1.8vw, 11px);
+  background: var(--mono-cash-bg);
+  text-align: left;
+}
+
+.mono-cash.is-turn {
+  border-color: var(--mono-fg);
+  box-shadow: inset 0 0 0 1px var(--mono-fg);
+}
+
+.mono-cash.is-mine .mono-cash-name {
+  color: var(--mono-fg);
+}
+
+.mono-cash-head {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.mono-dot {
+  display: block;
+  flex: 0 0 auto;
+  width: clamp(5px, 1.4vw, 8px);
+  height: clamp(5px, 1.4vw, 8px);
+  border-radius: 50%;
+}
+
+.mono-dot--black {
+  background: #14161b;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.mono-dot--white {
+  background: #f5f6f9;
+  box-shadow: inset 0 0 0 1px rgba(20, 22, 27, 0.55), 0 0 0 1px rgba(20, 22, 27, 0.18);
+}
+
+.mono-cash-name {
+  overflow: hidden;
+  color: var(--mono-muted);
+  font-size: clamp(9px, 2vw, 11px);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mono-cash-amount {
+  font-size: clamp(12px, 3.1vw, 17px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.mono-cash-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-width: 0;
+}
+
+.mono-cash-jail,
+.mono-cash-card,
+.mono-cash-win {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  border: 1px solid var(--mono-border);
+  border-radius: 4px;
+  color: var(--mono-muted);
+  font-size: clamp(8px, 1.7vw, 10px);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.mono-cash-win {
+  border-color: var(--mono-accent);
+  background: var(--mono-accent);
+  color: var(--mono-accent-text);
+  font-weight: 700;
+}
+
+/* ---------- 日志 ---------- */
+
+.mono-log-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mono-log-title {
+  margin: 0;
+  color: var(--mono-muted);
+  font-size: clamp(8px, 1.7vw, 10px);
+  letter-spacing: 0.16em;
+  opacity: 0.72;
+  text-align: left;
+}
+
+.mono-log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: clamp(46px, 13vh, 118px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  list-style: none;
+  text-align: left;
+  scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 6px, #000 calc(100% - 3px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 6px, #000 calc(100% - 3px), transparent 100%);
+}
+
+.mono-log::-webkit-scrollbar {
+  width: 4px;
+}
+
+.mono-log::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+  background: var(--mono-border-strong);
+}
+
+.mono-log-item {
+  padding: 1px 3px;
+  border-radius: 4px;
+  color: var(--mono-muted);
+  font-size: clamp(9px, 1.9vw, 11px);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.mono-log-item.is-empty {
+  opacity: 0.6;
+}
+
+.mono-log-item.is-new {
+  animation: mono-log-in 1.1s ease-out;
+}
+
+@keyframes mono-log-in {
+  0% {
+    background: var(--mono-log-new-bg);
+    transform: translateY(2px);
+  }
+  100% {
+    background: transparent;
+    transform: translateY(0);
+  }
+}
+
+/* ============================ 按钮 ============================ */
+
+.mono-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: clamp(8px, 1.7vw, 11px) clamp(12px, 2.8vw, 18px);
+  border: 1px solid var(--mono-border-strong);
+  border-radius: clamp(9px, 1.8vw, 12px);
+  background: var(--mono-btn-bg);
+  color: var(--mono-fg);
+  font: inherit;
+  font-size: clamp(12px, 2.5vw, 14px);
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease;
+}
+
+.mono-btn:hover:not(:disabled) {
+  border-color: var(--mono-fg);
+  transform: translateY(-1px);
+}
+
+.mono-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+}
+
+.mono-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.mono-btn:focus-visible,
+.mono-detail-close:focus-visible {
+  outline: 2px solid var(--mono-focus);
+  outline-offset: 2px;
+}
+
+.mono-btn--primary {
+  border-color: var(--mono-accent);
+  background: var(--mono-accent);
+  color: var(--mono-accent-text);
+}
+
+.mono-btn--primary:hover:not(:disabled) {
+  border-color: var(--mono-accent);
+  opacity: 0.9;
+}
+
+.mono.is-busy .mono-btn {
+  cursor: progress;
+}
+
+/* ============================ 操作区 ============================ */
+
+.mono-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 0;
+}
+
+.mono-hint {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--mono-muted);
+  font-size: clamp(10px, 2.1vw, 12px);
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* ============================ 买地面板 ============================ */
+
+.mono-buy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: clamp(9px, 2vw, 14px) clamp(11px, 2.4vw, 18px);
+  border: 1px solid var(--mono-accent);
+  border-radius: clamp(12px, 2.4vw, 16px);
+  background: var(--mono-glass-strong);
+  box-shadow: var(--mono-shadow-sm);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.mono-buy-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.mono-buy-tag {
+  align-self: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--mono-accent);
+  color: var(--mono-accent-text);
+  font-size: clamp(9px, 1.9vw, 11px);
+  font-weight: 600;
+}
+
+.mono-buy-name {
+  font-size: clamp(15px, 3.3vw, 19px);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.mono-buy-price {
+  font-size: clamp(13px, 2.9vw, 16px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.mono-buy-note {
+  margin: 0;
+  color: var(--mono-muted);
+  font-size: clamp(10px, 2.1vw, 12px);
+  line-height: 1.4;
+}
+
+.mono-buy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ============================ 地产详情 ============================ */
+
+.mono-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: clamp(10px, 2.4vw, 16px);
+  border: 1px solid var(--mono-border-strong);
+  border-radius: clamp(12px, 2.4vw, 16px);
+  background: var(--mono-glass);
+  box-shadow: var(--mono-shadow-sm);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.mono-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mono-detail-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mono-detail-name {
+  font-size: clamp(15px, 3.2vw, 18px);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.mono-detail-group {
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: clamp(9px, 1.9vw, 11px);
+  font-weight: 600;
+  line-height: 1.5;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+.mono-detail-close {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--mono-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--mono-muted);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mono-detail-close:hover {
+  border-color: var(--mono-border-strong);
+  color: var(--mono-fg);
+}
+
+.mono-detail-meta,
+.mono-detail-rent,
+.mono-detail-hint {
+  margin: 0;
+  color: var(--mono-muted);
+  font-size: clamp(11px, 2.3vw, 12.5px);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.mono-detail-rent {
+  color: var(--mono-fg);
+  opacity: 0.85;
+}
+
+.mono-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mono-detail-hint {
+  min-height: 1.2em;
+}
+
+/* ============================ 响应式 ============================ */
+
+@media (max-width: 560px) {
+  .mono {
+    gap: 10px;
+  }
+
+  .mono-board {
+    gap: 2px;
+    padding: 4px;
+    border-radius: 16px;
+  }
+
+  .mono-center {
+    gap: 3px;
+    padding: 6px;
+    border-radius: 11px;
+  }
+
+  .mono-cash {
+    padding: 3px 5px;
+  }
+
+  .mono-log {
+    max-height: 58px;
+  }
+
+  .mono-actions {
+    gap: 7px;
+  }
+
+  .mono-btn {
+    min-height: 42px;
+  }
+
+  .mono-detail,
+  .mono-buy {
+    border-radius: 13px;
+  }
+
+  .mono-buy-actions .mono-btn,
+  .mono-detail-actions .mono-btn {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 380px) {
+  .mono-turn-sub {
+    display: none;
+  }
+
+  .mono-log {
+    max-height: 46px;
+  }
+
+  .mono-cash-meta {
+    display: none;
+  }
+}
+
+/* 高度特别小的横屏：棋盘由上面的 calc(100dvh - 330px) 自动收缩，
+   这里只压缩日志高度，避免中央信息溢位 */
+@media (max-height: 620px) and (min-width: 561px) {
+  .mono-log {
+    max-height: 56px;
+  }
+}
+
+/* ============================ 减少动效 ============================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .mono *,
+  .mono *::before,
+  .mono *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
