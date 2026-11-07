@@ -54,8 +54,12 @@ def click_point(page, x, y):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8086)
+    parser.add_argument("--base", default="", help="完整服务地址（如 https://wkeeli.cn/gomoku/），优先于 --port")
     args = parser.parse_args()
-    base = "http://127.0.0.1:%d/" % args.port
+    base = args.base
+    if not base:
+        base = "http://127.0.0.1:%d/" % args.port
+    base = base.rstrip("/") + "/"
     shots = os.path.join(tempfile.gettempdir(), "gomoku-e2e")
     os.makedirs(shots, exist_ok=True)
 

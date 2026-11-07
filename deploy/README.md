@@ -347,3 +347,55 @@ gh repo view wzqfwanj/gomoku-online --json name,visibility,url,defaultBranchRef
 - [ ] unit 是否保持 root 运行（当前与 dev 上 `supersys.service` 一致；要隔离再加 `User=gomoku` + `chown -R`）。
 - [ ] 是否加应用层房间/连接上限（公网无密码，被刷时用；不改 Caddy 的 basic_auth）。
 - [ ] 房间 2 h 无活动由 `cleaner_loop` 自动回收（`ROOM_TTL`），暂无持久化需求。
+
+---
+
+## 9. 实际部署记录（2026-11-07 23:32–23:35 CST，ops 执行）
+
+上线地址：<https://wkeeli.cn/gomoku/>（`/gomoku` → 308 → `/gomoku/` → 200，公开无密码）
+部署基线：本机 `main` @ `1ed416f`（<https://github.com/wzqfwanj/gomoku-online>）
+
+### 9.1 部署清单
+
+| 项目 | 值 |
+| --- | --- |
+| dev 代码目录 | `/opt/gomoku/`（只传 `server.py` + `web/`，未传 `.git` / `tests/`） |
+| server.py sha256 | `75bc5c79…f7198`（与本地一致） |
+| web/* sha256 | `8d489b4e…af92`（app.js）/ `276d5a4b…60c7`（favicon.svg）/ `b81735c5…3fe1`（index.html）/ `616b4fe0…0569`（style.css），均与本地一致 |
+| systemd unit | `/etc/systemd/system/gomoku.service` sha256 `ab210c3a…76fa`；`enabled` + `active`；`MainPID=3011507`；`NRestarts=0` |
+| 监听 | `0.0.0.0:8086`（`ss -tlnp`） |
+| Caddyfile 备份 | `/etc/caddy/Caddyfile.bak-gomoku-20261107-233249`（sha256 `345afbcf…260e`，与改动前现网一致） |
+| Caddy diff | **+20 / -0 行**（`diff -u` 共 29 行）；插入位置：原第 132 行兜底 `reverse_proxy localhost:5000` 之前 |
+| caddy 校验/重载 | `caddy validate …` → `Valid configuration`；`systemctl reload caddy` → OK；caddy `active`、`NRestarts=0` |
+| 同步方式 | 本机 `scp -r .\server.py .\web dev:/opt/gomoku/`（本机无 rsync） |
+
+### 9.2 验收结果（全部实测通过）
+
+- 跳转/首页：`/gomoku` → **308** → `/gomoku/` → **200** `text/html`，`<title>五子棋</title>`
+- 静态：`/gomoku/app.js`、`/gomoku/style.css`、`/gomoku/favicon.svg` → **200**；`/gomoku/api/health` → **200** `{"ok":true,…}`
+- SSE（经 Caddy，Python urllib 客户端）：首帧 `event: state` **t=0.140 s**；心跳 `: ping` **t=15.062 s**；
+  响应头 `text/event-stream; charset=utf-8`、`X-Accel-Buffering: no`、`Cache-Control: no-cache, no-transform`、`Via: 1.1 Caddy`
+- 对局链路：建房 `RKYRKN` / `5A6VAR` → 加入 color=2 → 黑落 (7,7) → state `turn=2, moves=1, lastMove={7,7,1}` →
+  非己方回合 400 `not_your_turn` → 白落 (8,8) → state `moves=2, turn=1`、`board[7][7]=1`、`board[8][8]=2` →
+  无效房间 SSE 404 `room_not_found`
+- 回归（改动前后一致）：`/` 200、`/arch/` 401、`/schedul/` 302、`/pdf2ppt/` 200、`/lst/` 200
+- 站级安全头仍在：CSP / HSTS / `X-Frame-Options: DENY` / `nosniff`
+- 前端自查：`web/` 三个文件无任何外域 URL（符合 `default-src 'self'`）
+- 测试房间不清理，靠 `ROOM_TTL` 2 h 自动过期
+- 说明：Caddy 日志中 SSE 的 `aborting with incomplete response` / `reading: context canceled` 属测试客户端主动断开的正常 warn，非故障
+
+### 9.3 本次回滚命令（完整可直接粘贴）
+
+```bash
+# aliyun（root）：恢复 Caddy 配置并重载（dev 后端可继续跑）
+cp -a /etc/caddy/Caddyfile.bak-gomoku-20261107-233249 /etc/caddy/Caddyfile
+caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && systemctl reload caddy
+systemctl is-active caddy
+
+# dev（root）：停用后端
+systemctl disable --now gomoku
+systemctl status gomoku --no-pager -l
+
+# 可选：彻底清理
+rm -f /etc/systemd/system/gomoku.service && systemctl daemon-reload && rm -rf /opt/gomoku
+```
