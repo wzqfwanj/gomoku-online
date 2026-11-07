@@ -446,3 +446,70 @@ ssh dev "systemctl restart gomoku"
 ```
 
 > 补丁只影响 server.py，**无需回滚 Caddy**。回滚到 1ed416f 即恢复旧行为（对局中 restart 会清盘、chunked 不拒绝、SSE 断线最坏 ~18 s 才发现）——这正是本次修复点，非必要不回滚。
+
+---
+
+### 9.5 2026-11-08 音乐/视觉分支部署（server.py + web/ + Caddy CSP media-src）
+
+合并 commit `ebdda93`（feat/music-visuals → main）。本次线上变更三处：前端 `web/`（彩色氛围背景 + 音乐播放器，
+新增 `playlist.json` / `MUSIC-CREDITS.md`）、`server.py`（新增静态路由 `/playlist.json`）、Caddy 站级 CSP 的
+`media-src` 追加 `https://incompetech.com`（否则外链音频被站点 CSP 拦截）。
+
+**部署清单**
+
+| 项目 | 值 |
+| --- | --- |
+| 部署时间 | 2026-11-08 00:24 CST |
+| 代码基线 | `ebdda93`（merge feat/music-visuals） |
+| server.py sha256 | `72de5020…586d`（20639 B） |
+| web/ sha256 | app.js `0da61036…1ed5`、favicon.svg `6a99a1b4…4bd7`、index.html `7c4be1ed…c150`、MUSIC-CREDITS.md `e4440502…2c7f`、playlist.json `859f9645…ab7e`、style.css `98ecc0b2…6421`（全部与本地一致） |
+| 旧版备份（回滚用） | `/opt/gomoku/backup-526894c-20261108-002346.tar.gz`（旧 server.py + web/，sha256 `950ce7bb…06a1`） |
+| 服务 | `systemctl restart gomoku` → active；MainPID `3017294 → 3038589`；`ActiveEnterTimestamp` 00:24:17；`NRestarts=0` |
+| 监听/健康 | `0.0.0.0:8086`；`/api/health` → `{"ok":true,…}` 200 |
+| Caddy 备份 | `/etc/caddy/Caddyfile.bak-gomoku-20261108-002347` |
+| Caddy diff | **+1 / -1 行**（仅 CSP `media-src` 一行） |
+| Caddy 操作 | `caddy validate` → `Valid configuration`；`systemctl reload caddy` → OK；caddy active、`NRestarts=0`（未重启） |
+
+**Caddy CSP 变更（唯一一处）**
+
+```diff
+- media-src 'self' blob: https://*.aliyuncs.com
++ media-src 'self' blob: https://*.aliyuncs.com https://incompetech.com
+```
+
+（`default-src` / `script-src` / `style-src` / `connect-src` / `img-src` 与 HSTS、X-Frame-Options、nosniff 全部未动）
+
+**验收（2026-11-08 00:24–00:26 CST，ALL_PASS）**
+
+- `/gomoku/` 200 HTML、`<title>五子棋</title>`；页面 meta CSP 含 `media-src … https://incompetech.com`；`<audio id="music-audio">` 与 `#music-play` 存在
+- `/gomoku/playlist.json` 200 `application/json; charset=utf-8`（3155 B），JSON 合法、7 首曲目且 URL 全为 incompetech
+- 响应头 CSP 的 `media-src` 已含 `https://incompetech.com`；其余 CSP 指令逐字未变（`/arch/` 等其他路径同头）
+- 外链音乐：`Referer: https://wkeeli.cn/gomoku/` + `Range: 0-1023` → **206** `application/octet-stream`（1024 B，1.79 s）
+- **Playwright + Edge 线上 E2E：`python tests/test_e2e.py --base https://wkeeli.cn/gomoku/` → 36/36 PASS**，含
+  「点击后开始播放（`audio.paused=false` 且 `currentTime>0`）」「播放时请求外链音乐」「下一首/音量/记忆/暂停/CC BY 署名」
+  「观战/黑白对弈/五连判胜/双方再来一局/刷新保座/明暗主题/移动端」「无 JS/控制台错误」；截图输出到本机 `%TEMP%\gomoku-e2e\`
+- 线上 API 回归（经 Caddy，17 项 ALL_PASS）：建房/加入/落子、SSE 首帧 **0.029 s** + 心跳 **15.002 s**、无效房 404、
+  对局中 restart 400 `game_not_over`、chunked POST 400 `bad_request`、终局后双方 restart 200
+- 主站回归（本机外网 + aliyun 双视角，**不跟随重定向**）：`/` 200、`/arch/` 401、`/schedul/` 302、`/pdf2ppt/` 200、`/lst/` 200，与基线一致
+- 静态 5 件 + `/api/health` 全 200；Caddy 日志无 gomoku 相关 error
+
+**回滚（两处，建议一起回）**
+
+```bash
+# 1) aliyun：恢复 CSP（只影响 media-src 一行）
+cp -a /etc/caddy/Caddyfile.bak-gomoku-20261108-002347 /etc/caddy/Caddyfile
+caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && systemctl reload caddy
+systemctl is-active caddy
+
+# 2) dev：恢复旧版 server.py + web/ 并重启
+ssh dev "cd /opt/gomoku && tar xzf backup-526894c-20261108-002346.tar.gz && systemctl restart gomoku && systemctl is-active gomoku && curl -sS http://127.0.0.1:8086/api/health"
+
+# 3) 可选：从 git 重新同步旧版（本机）
+git checkout 526894c -- server.py web
+scp .\server.py dev:/opt/gomoku/server.py
+scp -r .\web dev:/opt/gomoku/
+ssh dev "systemctl restart gomoku"
+# 之后 git checkout ebdda93 -- server.py web 恢复本地新版
+```
+
+> 只回滚代码、不回滚 CSP 也安全（多放行一个媒体域无副作用）；但只回滚 CSP 而不回滚代码会让音乐按钮被 CSP 拦截而静默失败——**回滚时两处一起回**。
