@@ -305,6 +305,81 @@ def lianliankan_flow():
     return room
 
 
+def monopoly_flow():
+    print("[15] 创建大富翁房间")
+    status, created = post("/api/room", {"game": "monopoly"})
+    check("创建大富翁房间 200", status == 200, str(status))
+    room = created["roomId"]
+    black = created["token"]
+    check("game=monopoly", created.get("game") == "monopoly", str(created.get("game")))
+    status, white_join = post("/api/join", {"roomId": room})
+    white = white_join["token"]
+    check("第二人加入", status == 200 and white_join["color"] == 2, str(white_join))
+    status, spectator = post("/api/join", {"roomId": room})
+    spectator_token = spectator.get("token") or ""
+    check("第三人观战", status == 200 and spectator["color"] == 0, str(spectator))
+
+    black_sse = SSEClient(room, black)
+    state = black_sse.wait_for(lambda s: s["game"] == "monopoly" and s["players"]["black"]["connected"])
+    check("state.game=monopoly", state["game"] == "monopoly")
+    check("棋盘 24 格", len(state["board"]) == 24 and len(state["owners"]) == 24)
+    check("初始现金 1500", state["cash"] == {"black": 1500, "white": 1500}, str(state["cash"]))
+    check("初始位置 0", state["pos"] == {"black": 0, "white": 0})
+    check("初始 phase=roll", state["phase"] == "roll", str(state["phase"]))
+    check("初始 logs", len(state["log"]) >= 1, str(state["log"]))
+
+    print("[16] 掷骰 / 买地 / 回合流转")
+    status, body = post("/api/roll", {"roomId": room, "token": white})
+    check("白方未轮到 400 not_your_turn", body.get("error") == "not_your_turn", str(body))
+    status, body = post("/api/roll", {"roomId": room, "token": spectator_token})
+    check("观战者掷骰 400 not_player", body.get("error") == "not_player", str(body))
+    status, body = post("/api/roll", {"roomId": room, "token": black})
+    check("黑方掷骰 200", status == 200, str(body))
+    state = black_sse.wait_for(lambda s: s["dice"] is not None)
+    dice = state["dice"]
+    check("骰子 1-6", isinstance(dice, list) and len(dice) == 2 and all(1 <= v <= 6 for v in dice), str(dice))
+    check("位置按点数前进", state["pos"]["black"] == sum(dice) % 24, str(state["pos"]))
+    if state["phase"] == "buy":
+        tile = state["pending"]["tile"]
+        status, body = post("/api/buy", {"roomId": room, "token": black, "action": "buy"})
+        check("买地成功", status == 200, str(body))
+        state = black_sse.wait_for(lambda s: s["owners"][tile] == 1)
+        check("业主写入", state["owners"][tile] == 1)
+        status, body = post("/api/buy", {"roomId": room, "token": black, "action": "buy"})
+        check("非买地阶段 400 invalid_phase", body.get("error") == "invalid_phase", str(body))
+    status, body = post("/api/build", {"roomId": room, "token": black, "tile": 999})
+    check("非法地块 400 invalid_move", body.get("error") == "invalid_move", str(body))
+    status, body = post("/api/mortgage", {"roomId": room, "token": black, "tile": 1, "action": "x"})
+    check("非法抵押动作 400 invalid_move", body.get("error") == "invalid_move", str(body))
+    status, body = post("/api/jail", {"roomId": room, "token": black, "action": "pay"})
+    check("不在监狱 400 invalid_phase", body.get("error") == "invalid_phase", str(body))
+    if state["turn"] == 1:
+        status, body = post("/api/endturn", {"roomId": room, "token": black})
+        check("结束回合", status == 200, str(body))
+        state = black_sse.wait_for(lambda s: s["turn"] == 2)
+        check("轮到白方", state["turn"] == 2 and state["dice"] is None)
+    else:
+        check("回合已因规则切换", state["turn"] == 2 and state["dice"] is None)
+    status, body = post("/api/roll", {"roomId": room, "token": white})
+    check("白方掷骰", status == 200, str(body))
+
+    print("[17] 接口隔离 / 权限 / 错误码")
+    status, body = post("/api/move", {"roomId": room, "token": black, "x": 0, "y": 0})
+    check("move 到大富翁房 400 wrong_game", body.get("error") == "wrong_game", str(body))
+    status, body = post("/api/undo", {"roomId": room, "token": black, "action": "request"})
+    check("undo 到大富翁房 400 wrong_game", body.get("error") == "wrong_game", str(body))
+    status, body = post("/api/restart", {"roomId": room, "token": black})
+    check("对局中不可重开 400 game_not_over", body.get("error") == "game_not_over", str(body))
+
+    status, g = post("/api/room")
+    status, body = post("/api/roll", {"roomId": g["roomId"], "token": g["token"]})
+    check("roll 到五子棋房 400 wrong_game", body.get("error") == "wrong_game", str(body))
+    status, body = post("/api/room", {"game": "unknown"})
+    check("非法 game 400 invalid_game", body.get("error") == "invalid_game", str(body))
+
+    black_sse.close()
+
+
 def misc_flow():
     print("[13] 静态与健康检查")
     status, health = get("/api/health")
@@ -340,6 +415,7 @@ def main():
 
     gomoku_flow()
     lianliankan_flow()
+    monopoly_flow()
     misc_flow()
 
     print()

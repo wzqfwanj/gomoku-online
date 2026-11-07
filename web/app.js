@@ -36,8 +36,10 @@
     home: $('view-home'),
     game: $('view-game'),
     llk: $('view-llk'),
+    monopoly: $('view-monopoly'),
     createGomoku: $('create-gomoku'),
     createLlk: $('create-llk'),
+    createMonopoly: $('create-monopoly'),
     joinForm: $('join-form'),
     joinCode: $('join-code'),
     joinSubmit: $('join-submit'),
@@ -59,6 +61,12 @@
     llkRoot: $('llk-root'),
     llkRestartBtn: $('llk-restart-btn'),
     llkLeaveBtn: $('llk-leave-btn'),
+    monoRoomCode: $('mono-room-code'),
+    monoCopyBtn: $('mono-copy-btn'),
+    monoPresence: $('mono-presence'),
+    monopolyRoot: $('monopoly-root'),
+    monoRestartBtn: $('mono-restart-btn'),
+    monoLeaveBtn: $('mono-leave-btn'),
     board: $('board'),
     boardFx: $('board-fx'),
     restartBtn: $('restart-btn'),
@@ -80,7 +88,7 @@
     roomId: '',
     token: '',
     color: 0, // 1 黑 2 白 0 观战/未入座
-    game: 'gomoku', // gomoku | lianliankan
+    game: 'gomoku', // gomoku | lianliankan | monopoly
     state: null,
     es: null,
     joined: false,
@@ -91,6 +99,7 @@
     movePending: false,
     undoBusy: false,
     llkInited: false,
+    monoInited: false,
     seen: { black: false, white: false },
     spectatorHintShown: false,
     toastTimer: null,
@@ -313,7 +322,8 @@
   }
 
   function normalizeGame(value) {
-    return value === 'lianliankan' ? 'lianliankan' : 'gomoku';
+    if (value === 'lianliankan' || value === 'monopoly') return value;
+    return 'gomoku';
   }
 
   function resolveJoin(res, roomId, fallbackToken) {
@@ -335,6 +345,7 @@
   function setHomeControlsDisabled(disabled) {
     if (ui.createGomoku) ui.createGomoku.disabled = disabled;
     if (ui.createLlk) ui.createLlk.disabled = disabled;
+    if (ui.createMonopoly) ui.createMonopoly.disabled = disabled;
     if (ui.joinCode) ui.joinCode.disabled = disabled;
     if (ui.joinSubmit) ui.joinSubmit.disabled = disabled;
   }
@@ -345,7 +356,9 @@
     app.creating = true;
     app.busy = true;
     setHomeControlsDisabled(true);
-    var button = game === 'lianliankan' ? ui.createLlk : ui.createGomoku;
+    var button = ui.createGomoku;
+    if (game === 'lianliankan') button = ui.createLlk;
+    else if (game === 'monopoly') button = ui.createMonopoly;
     var label = button ? button.textContent : '创建房间';
     if (button) button.textContent = '创建中…';
     try {
@@ -529,6 +542,13 @@
       return;
     }
 
+    if (game === 'monopoly') {
+      updatePresence();
+      updateMonopoly();
+      updateMonoRestartButton();
+      return;
+    }
+
     var lm = state.lastMove;
     var key = lm && typeof lm.x === 'number' && typeof lm.y === 'number' ? lm.x + ':' + lm.y + ':' + (state.moves | 0) : '';
     if (key !== app.fx.lastMoveKey) {
@@ -567,16 +587,19 @@
     game = normalizeGame(game);
     app.game = game;
     var isGomoku = game === 'gomoku';
+    var isLlk = game === 'lianliankan';
     ui.home.hidden = true;
     ui.game.hidden = !isGomoku;
-    ui.llk.hidden = isGomoku;
+    ui.llk.hidden = !isLlk;
+    if (ui.monopoly) ui.monopoly.hidden = game !== 'monopoly';
     if (isGomoku) {
       window.requestAnimationFrame(function () {
         redrawBoard();
       });
     } else {
       resetFxState();
-      ensureLLKInit();
+      if (isLlk) ensureLLKInit();
+      else ensureMonopolyInit();
     }
   }
 
@@ -600,6 +623,13 @@
         /* 连连看模块异常不影响主页面 */
       }
     }
+    if (window.MONOPOLY && app.monoInited && typeof window.MONOPOLY.reset === 'function') {
+      try {
+        window.MONOPOLY.reset();
+      } catch (err) {
+        /* 大富翁模块异常不影响主页面 */
+      }
+    }
     app.roomId = '';
     app.token = '';
     app.color = 0;
@@ -617,23 +647,31 @@
     ui.home.hidden = false;
     ui.game.hidden = true;
     ui.llk.hidden = true;
+    if (ui.monopoly) ui.monopoly.hidden = true;
     ui.joinCode.value = '';
     ui.roomCode.textContent = '';
     if (ui.llkRoomCode) ui.llkRoomCode.textContent = '';
+    if (ui.monoRoomCode) ui.monoRoomCode.textContent = '';
     ui.status.textContent = '正在连接…';
     ui.status.className = 'status';
     ui.presence.textContent = '';
     if (ui.llkPresence) ui.llkPresence.textContent = '';
+    if (ui.monoPresence) ui.monoPresence.textContent = '';
     if (ui.score) {
       ui.score.hidden = true;
       ui.score.textContent = '';
     }
     if (ui.llkRoot) ui.llkRoot.textContent = '';
+    if (ui.monopolyRoot) ui.monopolyRoot.textContent = '';
     ui.restartBtn.hidden = true;
     ui.restartBtn.disabled = false;
     if (ui.llkRestartBtn) {
       ui.llkRestartBtn.hidden = true;
       ui.llkRestartBtn.disabled = false;
+    }
+    if (ui.monoRestartBtn) {
+      ui.monoRestartBtn.hidden = true;
+      ui.monoRestartBtn.disabled = false;
     }
     if (ui.undoBtn) {
       ui.undoBtn.hidden = true;
@@ -663,18 +701,23 @@
 
     ui.home.hidden = true;
     var isGomoku = app.game === 'gomoku';
+    var isLlk = app.game === 'lianliankan';
     ui.game.hidden = !isGomoku;
-    ui.llk.hidden = isGomoku;
+    ui.llk.hidden = !isLlk;
+    if (ui.monopoly) ui.monopoly.hidden = app.game !== 'monopoly';
     ui.roomCode.textContent = roomId;
     if (ui.llkRoomCode) ui.llkRoomCode.textContent = roomId;
+    if (ui.monoRoomCode) ui.monoRoomCode.textContent = roomId;
     setRoomInUrl(roomId);
     updateAll();
     if (isGomoku) {
       window.requestAnimationFrame(function () {
         redrawBoard();
       });
-    } else {
+    } else if (isLlk) {
       ensureLLKInit();
+    } else {
+      ensureMonopolyInit();
     }
     openStream();
   }
@@ -780,6 +823,7 @@
     }
     ui.presence.textContent = line;
     if (ui.llkPresence) ui.llkPresence.textContent = app.game === 'lianliankan' ? line : '';
+    if (ui.monoPresence) ui.monoPresence.textContent = app.game === 'monopoly' ? line : '';
   }
 
   function updateRestartButton() {
@@ -818,9 +862,29 @@
     button.setAttribute('aria-label', button.textContent);
   }
 
+  function updateMonoRestartButton() {
+    var button = ui.monoRestartBtn;
+    if (!button) return;
+    var state = app.state;
+    var isPlayer = app.color === 1 || app.color === 2;
+    if (!state || !isPlayer || app.game !== 'monopoly') {
+      button.hidden = true;
+      button.disabled = true;
+      return;
+    }
+    button.hidden = false;
+    var over = !!state.winner;
+    var ready = !!(app.color && readyAt(mySeat()));
+    button.textContent = ready ? '取消准备' : '再来一局';
+    button.disabled = !over || app.restartPending;
+    button.title = over ? '双方都点击后开始新一局' : '本局结束后可再来一局';
+    button.setAttribute('aria-label', button.textContent);
+  }
+
   function updateRestartButtons() {
     updateRestartButton();
     updateLLKRestartButton();
+    updateMonoRestartButton();
   }
 
   /* ============================ 比分 / 悔棋 ============================ */
@@ -944,7 +1008,7 @@
     return './' + text;
   }
 
-  function createLLKBridge() {
+  function createRoomBridge() {
     return {
       getRoom: function () {
         return app.roomId;
@@ -960,6 +1024,14 @@
       },
       toast: toast
     };
+  }
+
+  function createLLKBridge() {
+    return createRoomBridge();
+  }
+
+  function createMonopolyBridge() {
+    return createRoomBridge();
   }
 
   function ensureLLKInit() {
@@ -987,6 +1059,34 @@
       window.LLK.render(state, app.color);
     } catch (err) {
       /* 连连看模块异常不拖垮主页面 */
+    }
+  }
+
+  function ensureMonopolyInit() {
+    if (app.monoInited) return true;
+    if (!window.MONOPOLY || typeof window.MONOPOLY.init !== 'function') {
+      if (ui.monopolyRoot) ui.monopolyRoot.textContent = '大富翁模块加载中，请稍候…';
+      return false;
+    }
+    try {
+      window.MONOPOLY.init(createMonopolyBridge());
+      app.monoInited = true;
+      if (ui.monopolyRoot) ui.monopolyRoot.textContent = '';
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function updateMonopoly() {
+    if (!ui.monopoly || ui.monopoly.hidden) return;
+    if (!ensureMonopolyInit()) return;
+    var state = app.state;
+    if (!state) return;
+    try {
+      window.MONOPOLY.render(state, app.color);
+    } catch (err) {
+      /* 大富翁模块异常不拖垮主页面 */
     }
   }
 
@@ -1939,6 +2039,11 @@
         createRoom('lianliankan');
       });
     }
+    if (ui.createMonopoly) {
+      ui.createMonopoly.addEventListener('click', function () {
+        createRoom('monopoly');
+      });
+    }
     ui.joinForm.addEventListener('submit', onJoinSubmit);
     ui.joinCode.addEventListener('input', function () {
       var cleaned = ui.joinCode.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
@@ -1947,10 +2052,13 @@
     ui.themeToggle.addEventListener('click', toggleTheme);
     ui.copyBtn.addEventListener('click', copyInvite);
     if (ui.llkCopyBtn) ui.llkCopyBtn.addEventListener('click', copyInvite);
+    if (ui.monoCopyBtn) ui.monoCopyBtn.addEventListener('click', copyInvite);
     ui.restartBtn.addEventListener('click', restartRound);
     if (ui.llkRestartBtn) ui.llkRestartBtn.addEventListener('click', restartRound);
+    if (ui.monoRestartBtn) ui.monoRestartBtn.addEventListener('click', restartRound);
     ui.leaveBtn.addEventListener('click', leaveToHome);
     if (ui.llkLeaveBtn) ui.llkLeaveBtn.addEventListener('click', leaveToHome);
+    if (ui.monoLeaveBtn) ui.monoLeaveBtn.addEventListener('click', leaveToHome);
 
     if (ui.undoBtn) {
       ui.undoBtn.addEventListener('click', function () {
