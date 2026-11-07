@@ -8,6 +8,16 @@
 - 音乐：可选的免费版权背景音乐（外链 [Incompetech](https://incompetech.com) · Kevin MacLeod · CC BY 4.0），默认关闭、点按钮播放；曲目清单见 `web/playlist.json`，署名见 `web/MUSIC-CREDITS.md`
 - 视觉：黑白灰极简 UI + 低饱和彩色氛围背景，棋盘质感、落子动画与胜利高光
 
+## 界面
+
+| 浅色大厅（含音乐播放器） | 深色对局 |
+| --- | --- |
+| ![浅色大厅](docs/screenshots/lobby-music.png) | ![深色对局](docs/screenshots/game-dark.png) |
+
+| 移动端 |
+| --- |
+| ![移动端](docs/screenshots/mobile-light.png) |
+
 ## 技术栈
 
 | 层 | 实现 |
@@ -31,16 +41,20 @@ python server.py --port 9000     # 指定端口
 
 ```bash
 python tests/test_api.py --port 8086   # 需先启动服务
+python tests/test_e2e.py --port 8086   # 浏览器 E2E（Playwright + Edge）
 ```
 
-覆盖建房、加入、观战、轮次校验、五连判胜、终局、再来一局、断线重连等 41 项断言。
+- API 冒烟：41 项断言（建房、加入、观战、轮次校验、五连判胜、终局、重开、断线重连、播放列表等）
+- 浏览器 E2E：36 项断言（双人对战全流程、观战、刷新保座、明暗主题、移动端、音乐默认关闭/按需加载/真实播放/切歌/音量/署名）
 
 ## 目录结构
 
 ```
 server.py          后端服务（HTTP API + SSE + 静态文件）
 web/               前端页面（index.html / style.css / app.js / favicon.svg / playlist.json）
+web/MUSIC-CREDITS.md  背景音乐署名与许可证说明
 tests/test_api.py  API 冒烟测试
+tests/test_e2e.py  浏览器端到端测试
 deploy/            部署配置（systemd unit、Caddy 路由片段、部署说明）
 ```
 
@@ -66,6 +80,7 @@ deploy/            部署配置（systemd unit、Caddy 路由片段、部署说�
 - 房间状态保存在内存中，服务重启即丢局；房间 2 小时无活动自动回收。
 - 断线检测在约 1 秒内发现，再经 3 秒去抖后通知对手（约 4 秒）；SSE 另每 15 秒发一次心跳保活。
 - SSE 的玩家 token 通过查询参数传递，会进入反向代理/服务访问日志（公开小游戏，风险可接受）。
+- 背景音乐为外部曲库直链（incompetech.com，CC BY 4.0）：源站不可达时自动降级为无音乐；曲目不缓存（源站 `no-store`），首次播放可能缓冲数秒。
 - 采用自由规则：5 子及以上连珠即胜，无禁手。
 
 ## License
