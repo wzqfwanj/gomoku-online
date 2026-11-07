@@ -513,3 +513,55 @@ ssh dev "systemctl restart gomoku"
 ```
 
 > 只回滚代码、不回滚 CSP 也安全（多放行一个媒体域无副作用）；但只回滚 CSP 而不回滚代码会让音乐按钮被 CSP 拦截而静默失败——**回滚时两处一起回**。
+
+---
+
+### 9.6 2026-11-08 平台版部署（多游戏：五子棋悔棋/比分 + 连连看）
+
+合并 commit `3d732a7`（merge feat/platform-lianliankan）。本次为**纯代码部署，Caddy 零改动**（路径与 CSP 均不变）：
+`server.py` 重构为多游戏平台（Room 基类 + GomokuRoom / LianliankanRoom，新增 `/api/undo`、`/api/match`、
+`/api/hint`、`/api/shuffle`，state 新增 `game` / `score` / `undoLeft` / `boards` / `cleared`），
+`web/` 换平台首页（五子棋/连连看卡片、悔棋 + 跨局比分、双人竞速连连看），新增 `llk.js` / `llk.css`。
+
+**部署清单**
+
+| 项目 | 值 |
+| --- | --- |
+| 部署时间 | 2026-11-08 01:04 CST |
+| 代码基线 | `3d732a7` |
+| server.py sha256 | `2ee1482c…b935`（35029 B） |
+| web/ sha256 | app.js `9c5d6200…9e2f`、favicon.svg `6a99a1b4…4bd7`、index.html `0f88e5fd…25cb`、llk.css `57a6a8a5…053a`、llk.js `56dbb8e6…4fa4`、MUSIC-CREDITS.md `e4440502…2c7f`、playlist.json `859f9645…ab7e`、style.css `3103db8d…e074`（全部与本地一致） |
+| 旧版备份（回滚用） | `/opt/gomoku/backup-3d732a7-20261108-010401.tar.gz`（部署前版本 @ebdda93 的 server.py + web/，sha256 `202acf6f…2074`） |
+| 服务 | `systemctl restart gomoku` → active；MainPID `3038589 → 3058892`；`ActiveEnterTimestamp` 01:04:14；`NRestarts=0` |
+| 监听/健康 | `0.0.0.0:8086`；`/api/health` → `{"ok":true,…}` 200 |
+| **Caddy** | **未改动**：active、`NRestarts=0`；Caddyfile md5 `1108a6cf428ce959c4014c05ef46928b`，与 §9.5 备份 `Caddyfile.bak-gomoku-20261108-002347` 相比仍只有 CSP `media-src` 的 +1/-1；`redir /gomoku` 计数 1；CSP 响应头未变 |
+
+**验收（2026-11-08 01:04–01:06 CST，ALL_PASS）**
+
+- 首页 `/gomoku/` 200，`<title>联机小游戏</title>`；页面无旧规则文案「15×15 棋盘，黑方先行」（HTML 命中 0 次）
+- `/gomoku/llk.js` 200 `text/javascript; charset=utf-8`（36898 B）、`/gomoku/llk.css` 200 `text/css; charset=utf-8`（14059 B）、`/gomoku/playlist.json` 200 `application/json`（3155 B）；静态 5 件全 200
+- API 线上冒烟（经 Caddy）：建房 `{"game":"gomoku"}` → `game=gomoku`；`{"game":"lianliankan"}` → `game=lianliankan`，
+  state `boards.black` / `boards.white` 各 **64** 格、`cleared {0,0}`；`/api/hint` 返回 `{x1,y1,x2,y2}` 且 `/api/match` **200**、`cleared.black=1`、两格清空；
+  `/api/shuffle` 200；`state.score`=`{black:0,white:0}`、`undoLeft`=`{black:3,white:3}`；
+  黑落子后 `/api/undo request` **200** → 白方 `accept` **200** → 棋盘清空（`moves=0`）、黑方悔棋剩 2 次；
+  负例：对局中 restart 400 `game_not_over`、move/undo 到连连看房 400 `wrong_game`、非法 game 400 `invalid_game`、无效房 SSE 404、chunked POST 400
+- **Playwright + Edge 线上 E2E：`python tests/test_e2e.py --base https://wkeeli.cn/gomoku/` → 42 项通过**
+  （平台首页 / 两游戏卡片 / 旧文案已删 / 音乐控件 / 五子棋比分 / 悔棋请求→同意→次数-1 / 五连跨局比分 / 再来一局保留比分 / 刷新保座 / 主题 /
+  连连看 64 格 + 提示配对 + 对手进度同步 / 移动端 / 无控制台错误）。
+  其中 1 项为 **WARN**：外链音乐 18 s 内未缓冲完成（第三方网络，脚本按设计允许），但「播放时请求外链音乐」「播放态」均 PASS
+- SSE 首帧 **0.032 s**、心跳 **15.654 s**；主站回归（不跟随重定向）：`/` 200、`/arch/` 401、`/schedul/` 302、`/pdf2ppt/` 200、`/lst/` 200，与基线一致
+- Caddy 日志无 gomoku 相关 error
+
+**回滚（纯代码，Caddy 不动）**
+
+```bash
+# dev：用部署前整包备份覆盖并重启
+ssh dev "cd /opt/gomoku && tar xzf backup-3d732a7-20261108-010401.tar.gz && systemctl restart gomoku && systemctl is-active gomoku && curl -sS http://127.0.0.1:8086/api/health"
+
+# 可选：从 git 取上一版（本机）
+git checkout ebdda93 -- server.py web
+scp .\server.py dev:/opt/gomoku/server.py
+scp -r .\web dev:/opt/gomoku/
+ssh dev "systemctl restart gomoku"
+# 之后 git checkout 3d732a7 -- server.py web 恢复本地新版
+```
