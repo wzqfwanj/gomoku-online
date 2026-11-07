@@ -399,3 +399,50 @@ systemctl status gomoku --no-pager -l
 # 可选：彻底清理
 rm -f /etc/systemd/system/gomoku.service && systemctl daemon-reload && rm -rf /opt/gomoku
 ```
+
+### 9.4 2026-11-07 补丁重部署（server.py @4fdc7e6，Caddy 未改动）
+
+线上原运行部署版 server.py `@1ed416f`（sha256 `75bc5c79…f7198`）。补丁 commit `4fdc7e6` **仅改 server.py**（接口不变），
+故只替换 `/opt/gomoku/server.py` + `systemctl restart gomoku`，**Caddy 未做任何改动、未 reload**。
+
+**本次修复内容**
+
+1. `POST /api/restart` 仅终局后可重开：对局中（`winner == 0`）→ `400 {"error":"game_not_over"}`（旧版 200 会清盘）。
+2. 拒绝带 `Transfer-Encoding: chunked` 的 POST → `400 {"error":"bad_request"}`（避免 chunk 残留字节污染 keep-alive 下一条请求）。
+3. SSE 断线主动探测：等待循环用 `select + recv(MSG_PEEK)` 每秒探测对端关闭，客户端刷新/关页约 1 s 发现、3 s 去抖后广播（旧版最坏 ~18 s）；心跳仍 15 s。
+
+**部署记录**
+
+| 项目 | 值 |
+| --- | --- |
+| 部署时间 | 2026-11-07 23:43 CST |
+| 新 server.py sha256 | `8b755942…516a30`（20563 B，与本地 `4fdc7e6` 一致） |
+| 旧版备份（回滚用） | `/opt/gomoku/server.py.bak-1ed416f-20261107-234250`（sha256 `75bc5c79…f7198`） |
+| 校验 | `python3 -m py_compile` → OK；无 `__pycache__` 残留 |
+| 服务 | `systemctl restart gomoku` → active；MainPID `3011507 → 3017294`；`ActiveEnterTimestamp` 23:43:16；`NRestarts=0`（手动重启不计） |
+| 监听/健康 | `0.0.0.0:8086`；`curl 127.0.0.1:8086/api/health` → `{"ok":true,…}` 200 |
+| Caddy | **未改动**：Caddyfile md5 `2a2d5e3af9af4079c045ab91770a5a7b`、`redir /gomoku` 计数 1、caddy active、`NRestarts=0` |
+
+**验收（2026-11-07 23:43–23:44 CST，经 Caddy 实测，15 项断言 ALL_PASS）**
+
+- 关键修复①：建房→加入→黑落 (7,7) → 黑方 `POST /api/restart` → **400 `{"error":"game_not_over"}`**；随后 state 仍 `moves=1 / board[7][7]=1 / winner=0`（未清盘）
+- 关键修复②：带 `Transfer-Encoding: chunked` 的 `POST /gomoku/api/room` → **400 `{"error":"bad_request"}`**（经 Caddy TLS 与直连 dev:8086 均如此）
+- 关键修复③：白方保持 SSE，黑方裸 TLS 订阅后立即 RST 断开 → 白方 **3.972 s** 收到 `players.black.connected=false`（= 1 s 探测 + 3 s 去抖，旧版最坏 ~18 s）
+- 回归：5 个静态资源 + `/api/health` 全 200；`<title>五子棋</title>`；SSE 首帧 **0.033 s**、心跳 **15.002 s**；无效房间 SSE 404 `room_not_found`
+- 接口不变验证：终局（黑连五，9 手）后 black/white 各 `POST /api/restart` 均 **200**，重开后 state `winner=0 / moves=0 / turn=1`
+- 主站回归：`/` 200、`/arch/` 401、`/schedul/` 302、`/pdf2ppt/` 200（与基线一致）；Caddy 日志无 gomoku 相关 error
+
+**回滚（仅 server.py，Caddy 不动）**
+
+```bash
+# 方式 A：用 dev 上的旧版备份（推荐，最快）
+ssh dev "cp -a /opt/gomoku/server.py.bak-1ed416f-20261107-234250 /opt/gomoku/server.py && systemctl restart gomoku && systemctl is-active gomoku && curl -sS http://127.0.0.1:8086/api/health"
+
+# 方式 B：从 git 取上一版再 scp（本机）
+git show 1ed416f:server.py > server.py.1ed416f
+scp .\server.py.1ed416f dev:/opt/gomoku/server.py
+ssh dev "systemctl restart gomoku"
+# 之后 git checkout -- server.py 恢复本地文件即可
+```
+
+> 补丁只影响 server.py，**无需回滚 Caddy**。回滚到 1ed416f 即恢复旧行为（对局中 restart 会清盘、chunked 不拒绝、SSE 断线最坏 ~18 s 才发现）——这正是本次修复点，非必要不回滚。
